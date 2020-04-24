@@ -32,7 +32,7 @@ def default_loader(root, path_imgs, path_flo, mask_path=None):
         imgs.append(imread(img).astype(np.uint8))
     flow_file = load_flo(path_flo)
     mask = imread(mask_path).astype(np.float32)/255
-    mask = mask.astype(np.uint8)
+    mask = 1 - mask
     return imgs, flow_file, mask
 
 
@@ -93,7 +93,6 @@ class ListDataset(data.Dataset):
             if self.co_transform is not None:
                 inputs, gt_flow, mask = self.co_transform(inputs, gt_flow, mask)
         # here gt_flow has shape HxWx2
-
         # after co transform that could be reshapping the target
         # transforms here will always contain conversion to tensor (then channel is before)
         if self.source_image_transform is not None:
@@ -102,10 +101,12 @@ class ListDataset(data.Dataset):
             target_trans = self.target_image_transform(inputs[1])
         if self.flow_transform is not None:
             gt_flow_trans = self.flow_transform(gt_flow)
+        mask_trans = torch.from_numpy(mask)
+        mask_trans = mask_trans.long()
         return {'source_image': source_trans,
                 'target_image': target_trans,
                 'flow_map': gt_flow_trans,
-                'correspondence_mask': torch.from_numpy(mask),
+                'correspondence_mask': mask_trans,
                 'source_image_size': source_size
                 }
 

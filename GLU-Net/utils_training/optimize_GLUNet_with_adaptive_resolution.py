@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from utils.pixel_wise_mapping import remap_using_flow_fields
 from utils_training.multiscale_loss import multiscaleEPE, realEPE, sparse_max_pool
 from matplotlib import pyplot as plt
-
+from torch.autograd import Variable 
 
 def pre_process_data(source_img, target_img, device):
     '''
@@ -37,6 +37,7 @@ def pre_process_data(source_img, target_img, device):
     target_img_copy.sub_(mean[:, None, None]).div_(std[:, None, None])
 
     # resolution 256x256
+
     source_img_256 = torch.nn.functional.interpolate(input=source_img.float().to(device),
                                                       size=(256, 256),
                                                       mode='area').byte()
@@ -142,7 +143,7 @@ def train_epoch(net,
                 div_flow=1.0,
                 save_path=None,
                 loss_grid_weights=None,
-                apply_mask=False,
+                apply_mask=True,
                 robust_L1_loss=False,
                 sparse=False):
     """
@@ -179,9 +180,9 @@ def train_epoch(net,
                                                                                           device=device)
 
         output_net_256, output_net_original = net(target_image, source_image, target_image_256, source_image_256)
-
         # At original resolution
         flow_gt_original = mini_batch['flow_map'].to(device)
+
         if flow_gt_original.shape[1] != 2:
             # shape is bxhxwx2
             flow_gt_original = flow_gt_original.permute(0,3,1,2)
@@ -216,7 +217,7 @@ def train_epoch(net,
                                  mean=False, robust_L1_loss=robust_L1_loss)
             Loss += multiscaleEPE(output_net_256, flow_gt_256, weights=weights_256, sparse=False,
                                  mean=False, robust_L1_loss=robust_L1_loss)
-
+        Loss = Variable(Loss, requires_grad=True)
         Loss.backward()
         optimizer.step()
 
@@ -252,7 +253,7 @@ def validate_epoch(net,
                    save_path,
                    div_flow=1,
                    loss_grid_weights=None,
-                   apply_mask=False,
+                   apply_mask=True,
                    sparse=False,
                    robust_L1_loss=False):
     """

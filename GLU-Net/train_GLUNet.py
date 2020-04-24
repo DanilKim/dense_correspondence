@@ -125,7 +125,7 @@ if __name__ == "__main__":
                                   num_workers=args.n_threads)
 
     val_dataloader = DataLoader(val_dataset,
-                                batch_size=20,
+                                batch_size=args.batch_size,
                                 shuffle=False,
                                 num_workers=args.n_threads)
 
@@ -222,7 +222,7 @@ if __name__ == "__main__":
             train_writer.add_scalar('train loss', train_loss, epoch)
             train_writer.add_scalar('learning_rate', scheduler.get_lr()[0], epoch)
             print(colored('==> ', 'green') + 'Train average loss:', train_loss)
-
+            torch.cuda.empty_cache()
             # Validation
             val_loss_grid, val_mean_epe, val_mean_epe_H_8, val_mean_epe_32, val_mean_epe_16 = \
                 validate_epoch(model, val_dataloader, device, epoch=epoch,
@@ -241,7 +241,7 @@ if __name__ == "__main__":
             test_writer.add_scalar('validation images: mean EPE_from_reso_16', val_mean_epe_16, epoch)
             test_writer.add_scalar('validation images: val loss', val_loss_grid, epoch)
             print(colored('==> ', 'blue') + 'finished epoch :', epoch + 1)
-
+            torch.cuda.empty_cache()
             # save checkpoint for each epoch and a fine called best_model so far
             if best_val < 0:
                 best_val = val_mean_epe

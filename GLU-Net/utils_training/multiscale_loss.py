@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 
 def EPE(input_flow, target_flow, sparse=False, mean=True, sum=False):
@@ -13,6 +14,28 @@ def EPE(input_flow, target_flow, sparse=False, mean=True, sum=False):
         EPE_map = EPE_map[~mask]
     if mean:
         return EPE_map.mean()
+    elif sum:
+        return EPE_map.sum()
+    else:
+        return EPE_map.sum()/batch_size
+
+def EPE_VALID(input_flow, target_flow, sparse=False, mean=True, sum=False, mask=None):
+
+    EPE_map = torch.norm(target_flow-input_flow, 2, 1)
+
+    batch_size = EPE_map.size(0)
+    if sparse:
+        # invalid flow is defined with both flow coordinates to be exactly 0
+        mask = (target_flow[:,0] == 0) & (target_flow[:,1] == 0)
+
+        EPE_map = EPE_map[~mask]
+    if mean:
+        SUM_L = []
+        for nth in range(0, np.shape(EPE_map)[0]): # per each batch size, 
+            summation = torch.sum(EPE_map[nth, :, :])
+            mask_sum = (mask[nth, : , :] == 1).sum()
+            SUM_L.append(summation / mask_sum)
+        return torch.mean(torch.Tensor(SUM_L))
     elif sum:
         return EPE_map.sum()
     else:
@@ -135,10 +158,16 @@ def realEPE(output, target, mask_gt, ratio_x=None, ratio_y=None, sparse=False, m
     flow_est_x = upsampled_output.permute(0, 2, 3, 1)[:, :, :, 0]  # BxH_xW_
     flow_est_y = upsampled_output.permute(0, 2, 3, 1)[:, :, :, 1]
 
+    flow_target_x_mul = flow_target_x * mask_gt.float()
+    flow_target_y_mul = flow_target_y * mask_gt.float()
+
+    flow_est_x_mul = flow_est_x * mask_gt.float()
+    flow_est_y_mul = flow_est_y * mask_gt.float()
+
     flow_target = \
-        torch.cat((flow_target_x[mask_gt].unsqueeze(1),
-                   flow_target_y[mask_gt].unsqueeze(1)), dim=1)
+        torch.cat((flow_target_x_mul.unsqueeze(1),
+                   flow_target_y_mul.unsqueeze(1)), dim=1)
     flow_est = \
-        torch.cat((flow_est_x[mask_gt].unsqueeze(1),
-                   flow_est_y[mask_gt].unsqueeze(1)), dim=1)
-    return EPE(flow_est, flow_target, sparse, mean=mean, sum=sum)
+        torch.cat((flow_est_x_mul.unsqueeze(1),
+                   flow_est_y_mul.unsqueeze(1)), dim=1)
+    return EPE_VALID(flow_est, flow_target, sparse, mean=mean, sum=sum, mask=mask_gt)

@@ -353,6 +353,7 @@ class GLUNet_model(nn.Module):
         up_flow_4_warping = up_flow4 * div
         up_flow_4_warping[:, 0, :, :] *= ratio_x
         up_flow_4_warping[:, 1, :, :] *= ratio_y
+
         warp3 = warp(c23, up_flow_4_warping)
         # constrained correlation now
         corr3 = correlation.FunctionCorrelation(tensorFirst=c13, tensorSecond=warp3)
@@ -439,6 +440,7 @@ class GLUNet_model(nn.Module):
             flow2 = flow2 + self.dc_conv7_level2(self.dc_conv6_level2(self.dc_conv5_level2(x)))
 
         up_flow2 = self.deconv2(flow2)
+
         if self.decoder_inputs == 'corr_flow_feat':
             up_feat2 = self.upfeat2(x2)
 
