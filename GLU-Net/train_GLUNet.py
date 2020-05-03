@@ -49,7 +49,7 @@ if __name__ == "__main__":
                         help='start epoch')
     parser.add_argument('--n_epoch', type=int, default=200,
                         help='number of training epochs')
-    parser.add_argument('--batch-size', type=int, default=8,
+    parser.add_argument('--batch-size', type=int, default=10,
                         help='training batch size')
     parser.add_argument('--n_threads', type=int, default=8,
                         help='number of parallel threads for dataloaders')
