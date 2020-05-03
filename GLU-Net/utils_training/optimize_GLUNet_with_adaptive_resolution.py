@@ -109,7 +109,7 @@ def plot_during_training(save_path, epoch, batch, apply_mask,
         mask = mask.detach()[0].cpu().numpy().astype(np.float32)
     else:
         mask = np.ones((h_original, w_original))
-    axis[0][2].imshow(mask, vmin=0.0, vmax=1.0)
+    axis[0][2].imshow(mask, vmin=0.0, vmax=1.0, cmap='gray')
     axis[0][2].set_title("original reso: \nmask applied during training")
     axis[0][3].imshow(remapped_gt)
     axis[0][3].set_title("original reso : \nsource remapped with ground truth")
@@ -123,7 +123,7 @@ def plot_during_training(save_path, epoch, batch, apply_mask,
         mask_256 = mask_256.detach()[0].cpu().numpy().astype(np.float32)
     else:
         mask_256 = np.ones((h_256, w_256))
-    axis[1][2].imshow(mask_256, vmin=0.0, vmax=1.0)
+    axis[1][2].imshow(mask_256, vmin=0.0, vmax=1.0, cmap='gray')
     axis[1][2].set_title("reso 256: \nmask applied during training")
     axis[1][3].imshow(remapped_gt_256)
     axis[1][3].set_title("reso 256: \nsource remapped with ground truth")
@@ -217,7 +217,7 @@ def train_epoch(net,
                                  mean=False, robust_L1_loss=robust_L1_loss)
             Loss += multiscaleEPE(output_net_256, flow_gt_256, weights=weights_256, sparse=False,
                                  mean=False, robust_L1_loss=robust_L1_loss)
-        Loss = Variable(Loss, requires_grad=True)
+        #Loss = Variable(Loss, requires_grad=True)
         Loss.backward()
         optimizer.step()
 

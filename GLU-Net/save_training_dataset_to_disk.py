@@ -22,7 +22,7 @@ if __name__ == "__main__":
                         help='path to directory containing the original images.')
     parser.add_argument('--csv_path', type=str, default='datasets/csv_files/homo_aff_tps_train_DPED_CityScape_ADE.csv',
                         help='path to the CSV files')
-    parser.add_argument('--save_dir', type=str,
+    parser.add_argument('--save_dir', type=str, default='datasets/DPED-CityScape-ADE20k',
                         help='path directory to save the image pairs and corresponding ground-truth flows')
     parser.add_argument('--plot', default=False, type=boolean_string,
                         help='plot as examples the first 4 pairs ? default is False')

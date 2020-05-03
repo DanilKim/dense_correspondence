@@ -21,12 +21,13 @@ def get_gt_correspondence_mask(flow):
     return mask
 
 
-def default_loader(root, path_imgs, path_flo, mask_path=None):
-    '''
+def image_flow_loader(root, path_imgs, path_flo):
     imgs = [os.path.join(root,path) for path in path_imgs]
     flo = os.path.join(root,path_flo)
     return [imread(img).astype(np.uint8) for img in imgs], load_flo(flo)
-    '''
+
+
+def image_flow_mask_loader(path_imgs, path_flo, mask_path):
     imgs=[]
     for img in path_imgs:
         imgs.append(imread(img).astype(np.uint8))
@@ -38,7 +39,7 @@ def default_loader(root, path_imgs, path_flo, mask_path=None):
 
 class ListDataset(data.Dataset):
     def __init__(self, root, path_list, source_image_transform=None, target_image_transform=None, flow_transform=None,
-                 co_transform=None, loader=default_loader, mask=False, size=False):
+                 co_transform=None, loader=image_flow_loader, mask=False, size=False):
         """
 
         :param root: directory containing the dataset images
@@ -70,7 +71,8 @@ class ListDataset(data.Dataset):
 
     def __getitem__(self, index):
         # for all inputs[0] must be the source and inputs[1] must be the target
-        inputs, gt_flow, occ_mask = self.path_list[index]
+        #inputs, gt_flow, occ_mask = self.path_list[index]
+        inputs, gt_flow = self.path_list[index]
 
         if not self.mask:
             if self.size:

@@ -27,7 +27,6 @@ if __name__ == "__main__":
     # Paths
     parser.add_argument('--pre_loaded_training_dataset', default=True, type=boolean_string,
                         help='Synthetic training dataset is already created and saved in disk ? default is False')
-    '''
     parser.add_argument('--training_data_dir', type=str,
                         help='path to directory containing original images for training if --pre_loaded_training_'
                              'dataset is False or containing the synthetic pairs of training images and their '
@@ -36,7 +35,6 @@ if __name__ == "__main__":
                         help='path to directory containing original images for validation if --pre_loaded_training_'
                              'dataset is False or containing the synthetic pairs of validation images and their '
                              'corresponding flow fields if --pre_loaded_training_dataset is True')
-    '''
     parser.add_argument('--path', type=str, default='./save', help='dataset path for train/test')
     parser.add_argument('--ratio', type=float, default=0.75, help='split ratio of train/test dataset')
 
@@ -51,7 +49,7 @@ if __name__ == "__main__":
                         help='start epoch')
     parser.add_argument('--n_epoch', type=int, default=200,
                         help='number of training epochs')
-    parser.add_argument('--batch-size', type=int, default=16,
+    parser.add_argument('--batch-size', type=int, default=8,
                         help='training batch size')
     parser.add_argument('--n_threads', type=int, default=8,
                         help='number of parallel threads for dataloaders')
@@ -102,16 +100,18 @@ if __name__ == "__main__":
     else:
         # If synthetic pairs were already created and saved to disk, run instead of 'train_dataset' the following.
         # and replace args.training_data_dir by the root to folders containing images/ and flow/
-        train_list_dir, eval_list_dir = train_test_split_dir(args.path, args.ratio)
+        #train_list_dir, eval_list_dir = train_test_split_dir(args.path, args.ratio)
         flow_transform = transforms.Compose([ArrayToTensor()]) # just put channels first and put it to float
-        train_dataset, _ = PreMadeDataset_rework(root=train_list_dir,
+        #train_dataset, _ = PreMadeDataset_rework(root=train_list_dir,
+        train_dataset, _ = PreMadeDataset(root=args.training_data_dir,
                                           source_image_transform=source_img_transforms,
                                           target_image_transform=target_img_transforms,
                                           flow_transform=flow_transform,
                                           co_transform=None,
                                           split=1)  # only training
 
-        _, val_dataset = PreMadeDataset_rework(root=eval_list_dir,
+        #_, val_dataset = PreMadeDataset_rework(root=eval_list_dir,
+        _, val_dataset = PreMadeDataset(root=args.evaluation_data_dir,
                                         source_image_transform=source_img_transforms,
                                         target_image_transform=target_img_transforms,
                                         flow_transform=flow_transform,
@@ -203,56 +203,56 @@ if __name__ == "__main__":
     model = model.to(device)
 
     train_started = time.time()
-    with torch.no_grad():
-        for epoch in range(start_epoch, args.n_epoch):
-            scheduler.step()
-            print('starting epoch {}: info scheduler last_epoch is {}, learning rate is {}'.format(epoch,
-                    scheduler.last_epoch, scheduler.get_lr()[0]))
+    for epoch in range(start_epoch, args.n_epoch):
+        scheduler.step()
+        print('starting epoch {}: info scheduler last_epoch is {}, learning rate is {}'.format(epoch,
+                scheduler.last_epoch, scheduler.get_lr()[0]))
 
-            # Training one epoch
-            train_loss = train_epoch(model,
-                                     optimizer,
-                                     train_dataloader,
-                                     device,
-                                     epoch,
-                                     train_writer,
-                                     div_flow=args.div_flow,
-                                     save_path=os.path.join(save_path, 'train'),
-                                     loss_grid_weights=weights_loss_coeffs)
-            train_writer.add_scalar('train loss', train_loss, epoch)
-            train_writer.add_scalar('learning_rate', scheduler.get_lr()[0], epoch)
-            print(colored('==> ', 'green') + 'Train average loss:', train_loss)
-            torch.cuda.empty_cache()
-            # Validation
-            val_loss_grid, val_mean_epe, val_mean_epe_H_8, val_mean_epe_32, val_mean_epe_16 = \
-                validate_epoch(model, val_dataloader, device, epoch=epoch,
-                               save_path=os.path.join(save_path, 'test'),
-                               div_flow=args.div_flow,
-                               loss_grid_weights=weights_loss_coeffs)
-            print(colored('==> ', 'blue') + 'bigger images: Val average grid loss :',
-                  val_loss_grid)
-            print('mean EPE is {}'.format(val_mean_epe))
-            print('mean EPE from reso H/8 is {}'.format(val_mean_epe_H_8))
-            print('mean EPE from reso 32 is {}'.format(val_mean_epe_32))
-            print('mean EPE from reso 16 is {}'.format(val_mean_epe_16))
-            test_writer.add_scalar('validation images: mean EPE ', val_mean_epe, epoch)
-            test_writer.add_scalar('validation images: mean EPE_from_reso_H_8', val_mean_epe_H_8, epoch)
-            test_writer.add_scalar('validation images: mean EPE_from_reso_32', val_mean_epe_32, epoch)
-            test_writer.add_scalar('validation images: mean EPE_from_reso_16', val_mean_epe_16, epoch)
-            test_writer.add_scalar('validation images: val loss', val_loss_grid, epoch)
-            print(colored('==> ', 'blue') + 'finished epoch :', epoch + 1)
-            torch.cuda.empty_cache()
-            # save checkpoint for each epoch and a fine called best_model so far
-            if best_val < 0:
-                best_val = val_mean_epe
+        # Training one epoch
+        train_loss = train_epoch(model,
+                                 optimizer,
+                                 train_dataloader,
+                                 device,
+                                 epoch,
+                                 train_writer,
+                                 div_flow=args.div_flow,
+                                 save_path=os.path.join(save_path, 'train'),
+                                 loss_grid_weights=weights_loss_coeffs)
+        train_writer.add_scalar('train loss', train_loss, epoch)
+        train_writer.add_scalar('learning_rate', scheduler.get_lr()[0], epoch)
+        print(colored('==> ', 'green') + 'Train average loss:', train_loss)
+        torch.cuda.empty_cache()
 
-            is_best = val_mean_epe < best_val
-            best_val = min(val_mean_epe, best_val)
-            save_checkpoint({'epoch': epoch + 1,
-                             'state_dict': model.module.state_dict(),
-                             'optimizer': optimizer.state_dict(),
-                             'scheduler': scheduler.state_dict(),
-                             'best_loss': best_val},
-                            is_best, save_path, 'epoch_{}.pth'.format(epoch + 1))
+        # Validation
+        val_loss_grid, val_mean_epe, val_mean_epe_H_8, val_mean_epe_32, val_mean_epe_16 = \
+            validate_epoch(model, val_dataloader, device, epoch=epoch,
+                           save_path=os.path.join(save_path, 'test'),
+                           div_flow=args.div_flow,
+                           loss_grid_weights=weights_loss_coeffs)
+        print(colored('==> ', 'blue') + 'bigger images: Val average grid loss :',
+              val_loss_grid)
+        print('mean EPE is {}'.format(val_mean_epe))
+        print('mean EPE from reso H/8 is {}'.format(val_mean_epe_H_8))
+        print('mean EPE from reso 32 is {}'.format(val_mean_epe_32))
+        print('mean EPE from reso 16 is {}'.format(val_mean_epe_16))
+        test_writer.add_scalar('validation images: mean EPE ', val_mean_epe, epoch)
+        test_writer.add_scalar('validation images: mean EPE_from_reso_H_8', val_mean_epe_H_8, epoch)
+        test_writer.add_scalar('validation images: mean EPE_from_reso_32', val_mean_epe_32, epoch)
+        test_writer.add_scalar('validation images: mean EPE_from_reso_16', val_mean_epe_16, epoch)
+        test_writer.add_scalar('validation images: val loss', val_loss_grid, epoch)
+        print(colored('==> ', 'blue') + 'finished epoch :', epoch + 1)
+        torch.cuda.empty_cache()
+        # save checkpoint for each epoch and a fine called best_model so far
+        if best_val < 0:
+            best_val = val_mean_epe
 
-        print(args.seed, 'Training took:', time.time()-train_started, 'seconds')
+        is_best = val_mean_epe < best_val
+        best_val = min(val_mean_epe, best_val)
+        save_checkpoint({'epoch': epoch + 1,
+                         'state_dict': model.module.state_dict(),
+                         'optimizer': optimizer.state_dict(),
+                         'scheduler': scheduler.state_dict(),
+                         'best_loss': best_val},
+                        is_best, save_path, 'epoch_{}.pth'.format(epoch + 1))
+
+    print(args.seed, 'Training took:', time.time()-train_started, 'seconds')

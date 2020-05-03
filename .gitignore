@@ -1,2 +1,13 @@
 sintel
 save
+GLU-Net/snapshots
+GLU-Net/datasets/training_datasets
+GLU-Net/datasets/testing_datasets
+GLU-Net/datasets/__pycache__
+GLU-Net/results
+GLU-Net/models/__pycache__
+GLU-Net/models/our_models/__pycache__
+GLU-Net/utils_training/__pycache__
+GLU-Net/pre_trained_models
+__pycache__
+

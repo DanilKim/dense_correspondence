@@ -16,7 +16,7 @@ import torch.nn as nn
 
 dataset_names = sorted(name for name in datasets.__all__)
 model_type = ['GLUNet', 'SemanticGLUNet', 'LOCALNet', 'GLOBALNet', 'GLOCALNet']
-pre_trained_model_type = ['DPED_CityScape_ADE', 'tokyo', 'chairs-things',  'flying-chairs']
+pre_trained_model_type = ['DPED_CityScape_ADE', 'tokyo', 'chairs-things',  'flying-chairs', 'Sintel']
 
 
 # Argument parsing
@@ -41,6 +41,8 @@ parser.add_argument('--flipping_condition', dest='flipping_condition', default=F
                     help='apply flipping condition during eval ? default is false')
 parser.add_argument('--pre_trained_models', nargs='+', choices=pre_trained_model_type,
                     help='name of pre trained models, can have several ones')
+parser.add_argument('--pre_trained_models_dir', type=str, default='pre_trained_models/',
+                    help='Directory containing the pre-trained-models.')
 parser.add_argument('--save', default=False, type=boolean_string,
                     help='save the flow files ? default is False')
 parser.add_argument('--save_dir', type=str, default='evaluation/',
@@ -77,6 +79,7 @@ for pre_trained_model_type in pre_trained_models:
         # define the network to use
         if args.model == 'GLUNet':
             network = GLU_Net(model_type=pre_trained_model_type,
+                              path_pre_trained_models=args.pre_trained_models_dir,
                               consensus_network=False,
                               cyclic_consistency=True,
                               iterative_refinement=True,
@@ -84,6 +87,7 @@ for pre_trained_model_type in pre_trained_models:
 
         elif args.model == 'SemanticGLUNet':
             network = GLU_Net(model_type=pre_trained_model_type,
+                              path_pre_trained_models=args.pre_trained_models_dir,
                               feature_concatenation=True,
                               cyclic_consistency=False,
                               consensus_network=True,
