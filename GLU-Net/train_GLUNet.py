@@ -124,7 +124,7 @@ if __name__ == "__main__":
                                         split=0, transform_type = args.transform_type, crop_size = args.crop_size)  # only validation
     # check gt pair
     if(args.check_gt) : 
-        check_gt_pair(train_dataset)
+        check_gt_pair(train_dataset)    
     
     # Dataloader
     train_dataloader = DataLoader(train_dataset,
