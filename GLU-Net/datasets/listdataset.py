@@ -131,7 +131,7 @@ class ListDataset(data.Dataset):
                 gt_flow_trans = self.flow_transform(gt_flow_trans)
             elif self.transform_type == 'center': 
                 gt_flow_trans = resize(gt_flow, self.crop_size)
-                gt_flow_trans = self.flow_transform(gt_flow)
+                gt_flow_trans = self.flow_transform(gt_flow_trans)
             else : raise "transform type ERROR in listdataset.py!"
 
         if self.mask is not None : 

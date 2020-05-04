@@ -29,7 +29,7 @@ def make_dataset(dir, split=None, dataset_name=None):
         root_filename = os.path.basename(flow_map)[:-9]
         img1 = os.path.join(image_dir, root_filename + '_img_1.jpg') # source image
         img2 = os.path.join(image_dir, root_filename + '_img_2.jpg') # target image
-        if not (os.path.isfile(os.path.join(dir, img1)) and os.path.isfile(os.path.join(dir, img2))):
+        if not (os.path.isfile(os.path.join(dir,img1)) or os.path.isfile(os.path.join(dir,img2))):
             continue
         if dataset_name is not None:
             images.append([[os.path.join(dataset_name, img1),
@@ -38,7 +38,6 @@ def make_dataset(dir, split=None, dataset_name=None):
         else:
             images.append([[img1, img2], flow_map])
     return split2list(images, split, default_split=0.97)
-
 
 def make_dataset_rework(dir, split=None, dataset_name=None):
     '''Will search for triplets that go by the pattern '[name]_img1.ppm  [name]_img2.ppm  in folder images and
@@ -55,11 +54,12 @@ def make_dataset_rework(dir, split=None, dataset_name=None):
         raise ValueError("the training directory path that you indicated does not exist ! ")
     
     flow_map = os.path.join(dir, 'flow.flo')
-    source_img = os.path.join(dir, 'target.png') # source image
-    target_img = os.path.join(dir, 'source.png') # target image
+    source_img = os.path.join(dir, 'source.png') # source image
+    target_img = os.path.join(dir, 'target.png') # target image
     occ_mask = os.path.join(dir, 'occlusion.png') # occ_mask
     images.append([[source_img, target_img], flow_map, occ_mask])
     return split2list(images, split, default_split=0.97)
+    
 
 
 
@@ -79,7 +79,7 @@ def PreMadeDataset(root, source_image_transform=None, target_image_transform=Non
     else:
         train_list, test_list = make_dataset(root, split)
     print(root)
-    train_dataset = ListDataset(root, train_list, source_image_transform=source_image_transform,
+    train_dataset = ListDataset(root,  train_list, source_image_transform=source_image_transform,
                                 target_image_transform=target_image_transform,
                                 flow_transform=flow_transform, co_transform=co_transform)
     test_dataset = ListDataset(root, test_list, source_image_transform=source_image_transform,
@@ -88,8 +88,7 @@ def PreMadeDataset(root, source_image_transform=None, target_image_transform=Non
 
     return train_dataset, test_dataset
 
-
-def PreMadeDataset_rework(root, source_image_transform=None, target_image_transform=None, flow_transform=None,
+def PreMadeDataset_rework(root,  source_image_transform=None, target_image_transform=None, flow_transform=None,
                    co_transform=None, split=None, mask_zero_borders=False, transform_type='raw', crop_size=512):
     # that is only reading and loading the data and applying transformations to both datasets
     train_list=[]
@@ -102,11 +101,11 @@ def PreMadeDataset_rework(root, source_image_transform=None, target_image_transf
         test_list.extend(sub_test_list)
     
     root = os.path.dirname(sub_root)    
-    train_dataset = ListDataset(root, train_list, source_image_transform=source_image_transform,
+    train_dataset = ListDataset(root = root, crop_size=crop_size, path_list = train_list, source_image_transform=source_image_transform,
                                 target_image_transform=target_image_transform, mask=True,
-                                flow_transform=flow_transform, co_transform=co_transform, transform_type = transform_type, crop_size=crop_size)
-    test_dataset = ListDataset(root, test_list, source_image_transform=source_image_transform,
+                                flow_transform=flow_transform, co_transform=co_transform, transform_type = transform_type)
+    test_dataset = ListDataset(root = root,  crop_size=crop_size, path_list = test_list, source_image_transform=source_image_transform,
                                target_image_transform=target_image_transform, mask=True,
-                               flow_transform=flow_transform, co_transform=co_transform, transform_type = transform_type, crop_size=crop_size)
+                               flow_transform=flow_transform, co_transform=co_transform, transform_type = transform_type)
     return train_dataset, test_dataset
     

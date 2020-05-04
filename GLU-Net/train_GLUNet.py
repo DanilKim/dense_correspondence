@@ -125,9 +125,6 @@ if __name__ == "__main__":
     # check gt pair
     if(args.check_gt) : 
         check_gt_pair(train_dataset)
-
-    raise "NOT"
-    
     
     # Dataloader
     train_dataloader = DataLoader(train_dataset,

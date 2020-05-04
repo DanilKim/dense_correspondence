@@ -285,10 +285,12 @@ def check_gt_pair(dataset):
     dataloader = DataLoader(dataset,
                              batch_size=1,
                              shuffle=False,
-                             num_workers=1)
+                             num_workers=32)
     norm = []
+    print("Check gt pair..")
     print("total len : ", len(dataloader))
-    for i, mini_batch in enumerate(dataloader):
+    pbar = tqdm(enumerate(dataloader), total=len(dataloader))
+    for i, mini_batch in pbar:
         per_image = []
         source_img = mini_batch['source_image'].squeeze()
         target_img = mini_batch['target_image'].squeeze()
