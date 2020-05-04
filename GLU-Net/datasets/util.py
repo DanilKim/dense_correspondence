@@ -2,6 +2,10 @@ import numpy as np
 import cv2
 from utils.pixel_wise_mapping import remap_using_correspondence_map
 import torch
+import random
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
 
 
 def load_flo(path):
@@ -15,7 +19,6 @@ def load_flo(path):
     # Reshape data into 3D array (columns, rows, bands)
     data2D = np.resize(data, (h, w, 2))
     return data2D
-
 
 def split2list(images, split, default_split=0.9):
     if isinstance(split, str):
@@ -35,6 +38,53 @@ def split2list(images, split, default_split=0.9):
     test_samples = [sample for sample, split in zip(images, split_values) if not split]
     return train_samples, test_samples
 
+def random_crop(img, size, seed, value=[0,0,0]):
+    if isinstance(size, tuple):
+        size = size[0]
+        #size is W,H
+    
+    img = img.copy()
+    
+    h = img.shape[0]
+    w = img.shape[1]
+    
+    pad_w = 0
+    pad_h = 0
+
+    if w < size:
+        pad_w = np.int(np.ceil((size - w) / 2))
+    if h < size:
+        pad_h = np.int(np.ceil((size - h) / 2))
+
+    img_pad = cv2.copyMakeBorder(img,
+                                 pad_h,
+                                 pad_h,
+                                 pad_w,
+                                 pad_w,
+                                 cv2.BORDER_CONSTANT,
+                                 value=value)
+    h, w = img_pad.shape[:2]
+    random.seed(seed)
+    x = random.randint(0, w - size)
+    if(x%2 == 1): # if width len is odd number, make it even number.
+        if((x-1) <= 0) : x = x + 1
+        elif((x+1) > (w-size)) : x = x-1
+    if (x % 8) >= 1 :  # if width len is not correctly divided by eight, make it correct.
+        if((x) + (8 - x%8) > w-size) : x = x - (x%8)
+        else : x = x + (8 - x%8)
+    
+    #y = random.randint(0, h - size)
+    y = 0
+
+    if len(img.shape)==3 :
+        imgr = img_pad[y:y+h, x:x+size, :]
+    else: 
+        imgr = img_pad[y:y+h, x:x+size]
+    return imgr
+    
+def resize(img, size):
+    result = cv2.resize(img, dsize=(size, size), interpolation=cv2.INTER_LINEAR)
+    return np.asarray(result)
 
 def center_crop(img, size):
     """
@@ -76,7 +126,6 @@ def center_crop(img, size):
 
     return img_pad, x1, y1
 
-
 def get_mapping_horizontal_flipping(image):
     H, W, C = image.shape
     mapping = np.zeros((H,W,2), np.float32)
@@ -85,7 +134,6 @@ def get_mapping_horizontal_flipping(image):
             mapping[j, i, 0] = W - i
             mapping[j, i, 1] = j
     return mapping, remap_using_correspondence_map(image, mapping[:,:,0], mapping[:,:,1])
-
 
 def convert_flow_to_mapping(flow, output_channel_first=True):
     if not isinstance(flow, np.ndarray):
@@ -159,7 +207,6 @@ def convert_flow_to_mapping(flow, output_channel_first=True):
                 map = map.transpose(2,0,1).float()
         return map.astype(np.float32)
 
-
 def convert_mapping_to_flow(map, output_channel_first=True):
     if not isinstance(map, np.ndarray):
         # torch tensor
@@ -232,3 +279,58 @@ def convert_mapping_to_flow(map, output_channel_first=True):
             if output_channel_first:
                 flow = flow.transpose(2,0,1).float()
         return flow.astype(np.float32)
+
+
+def check_gt_pair(dataset):
+    dataloader = DataLoader(dataset,
+                             batch_size=1,
+                             shuffle=False,
+                             num_workers=1)
+    norm = []
+    print("total len : ", len(dataloader))
+    for i, mini_batch in enumerate(dataloader):
+        per_image = []
+        source_img = mini_batch['source_image'].squeeze()
+        target_img = mini_batch['target_image'].squeeze()
+        flow = mini_batch['flow_map'].squeeze()
+        mask = mini_batch['correspondence_mask'].squeeze()
+
+        img_width = source_img.shape[2]
+        img_height = source_img.shape[1]
+
+        
+        for h in range(0, img_height):
+            for w in range(0, img_width):
+                if(mask[h][w] == 1) : 
+                    x_dt = flow[0][h][w].round().long()
+                    y_dt = flow[1][h][w].round().long()
+                    diff = (target_img[:,min(img_height-1, h+y_dt),min(img_width-1,w+x_dt)] - \
+                            source_img[:,h,w]).double()
+                    per_image.append(torch.norm(diff, p=2).numpy()) ## diff per one pixel(3 channel)
+        ## mean of diff per one "IMAGE(source-target)"
+        norm.append(np.asarray(per_image).mean())
+    print("total norm mean : ", np.asarray(norm).mean())                
+
+
+                   
+
+
+
+        
+
+
+
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+

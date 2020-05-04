@@ -90,7 +90,7 @@ def PreMadeDataset(root, source_image_transform=None, target_image_transform=Non
 
 
 def PreMadeDataset_rework(root, source_image_transform=None, target_image_transform=None, flow_transform=None,
-                   co_transform=None, split=None, mask_zero_borders=False):
+                   co_transform=None, split=None, mask_zero_borders=False, transform_type='raw', crop_size=512):
     # that is only reading and loading the data and applying transformations to both datasets
     train_list=[]
     test_list=[]
@@ -104,14 +104,9 @@ def PreMadeDataset_rework(root, source_image_transform=None, target_image_transf
     root = os.path.dirname(sub_root)    
     train_dataset = ListDataset(root, train_list, source_image_transform=source_image_transform,
                                 target_image_transform=target_image_transform, mask=True,
-                                flow_transform=flow_transform, co_transform=co_transform)
+                                flow_transform=flow_transform, co_transform=co_transform, transform_type = transform_type, crop_size=crop_size)
     test_dataset = ListDataset(root, test_list, source_image_transform=source_image_transform,
                                target_image_transform=target_image_transform, mask=True,
-                               flow_transform=flow_transform, co_transform=co_transform)
+                               flow_transform=flow_transform, co_transform=co_transform, transform_type = transform_type, crop_size=crop_size)
     return train_dataset, test_dataset
     
-
-if __name__ == "__main__":
-    root = "/home/kinux98/study/lab_research/Datasets/save"
-    train_list_dir, eval_list_dir = train_test_split_dir(root, 0.7)
-    train_dataset, _ = PreMadeDataset_rework(root=train_list_dir, split=1)  # only training
