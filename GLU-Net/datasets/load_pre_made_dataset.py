@@ -53,12 +53,13 @@ def make_dataset_rework(dir, split=None, dataset_name=None):
     # Make sure that the folders exist
     if not os.path.isdir(dir):
         raise ValueError("the training directory path that you indicated does not exist ! ")
-    
+
     flow_map = os.path.join(dir, 'flow.flo')
     source_img = os.path.join(dir, 'target.png') # source image
     target_img = os.path.join(dir, 'source.png') # target image
-    occ_mask = os.path.join(dir, 'occlusion.png') # occ_mask
-    images.append([[source_img, target_img], flow_map, occ_mask])
+    #occ_mask = os.path.join(dir, 'occlusion.png') # occ_mask
+    #images.append([[source_img, target_img], flow_map, occ_mask])
+    images.append([[source_img, target_img], flow_map])
     return split2list(images, split, default_split=0.97)
 
 
@@ -100,8 +101,8 @@ def PreMadeDataset_rework(root, source_image_transform=None, target_image_transf
         sub_train_list, sub_test_list = make_dataset_rework(sub_root, split)
         train_list.extend(sub_train_list)
         test_list.extend(sub_test_list)
-    
-    root = os.path.dirname(sub_root)    
+
+    root = os.path.dirname(sub_root)
     train_dataset = ListDataset(root, train_list, source_image_transform=source_image_transform,
                                 target_image_transform=target_image_transform, mask=True,
                                 flow_transform=flow_transform, co_transform=co_transform)

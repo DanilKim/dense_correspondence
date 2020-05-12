@@ -100,18 +100,18 @@ if __name__ == "__main__":
     else:
         # If synthetic pairs were already created and saved to disk, run instead of 'train_dataset' the following.
         # and replace args.training_data_dir by the root to folders containing images/ and flow/
-        #train_list_dir, eval_list_dir = train_test_split_dir(args.path, args.ratio)
+        train_list_dir, eval_list_dir = train_test_split_dir(args.path, args.ratio)
         flow_transform = transforms.Compose([ArrayToTensor()]) # just put channels first and put it to float
-        #train_dataset, _ = PreMadeDataset_rework(root=train_list_dir,
-        train_dataset, _ = PreMadeDataset(root=args.training_data_dir,
+        train_dataset, _ = PreMadeDataset_rework(root=train_list_dir,
+        #train_dataset, _ = PreMadeDataset(root=args.training_data_dir,
                                           source_image_transform=source_img_transforms,
                                           target_image_transform=target_img_transforms,
                                           flow_transform=flow_transform,
                                           co_transform=None,
                                           split=1)  # only training
 
-        #_, val_dataset = PreMadeDataset_rework(root=eval_list_dir,
-        _, val_dataset = PreMadeDataset(root=args.evaluation_data_dir,
+        _, val_dataset = PreMadeDataset_rework(root=eval_list_dir,
+        #_, val_dataset = PreMadeDataset(root=args.evaluation_data_dir,
                                         source_image_transform=source_img_transforms,
                                         target_image_transform=target_img_transforms,
                                         flow_transform=flow_transform,

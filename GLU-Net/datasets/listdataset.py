@@ -27,11 +27,12 @@ def image_flow_loader(root, path_imgs, path_flo):
     return [imread(img).astype(np.uint8) for img in imgs], load_flo(flo)
 
 
-def image_flow_mask_loader(path_imgs, path_flo, mask_path):
+def image_flow_mask_loader(root, path_imgs, path_flo):
     imgs=[]
     for img in path_imgs:
         imgs.append(imread(img).astype(np.uint8))
     flow_file = load_flo(path_flo)
+    mask_path = os.path.join('/'.join(path_flo.split('/')[:-1]), 'occlusion.png')
     mask = imread(mask_path).astype(np.float32)/255
     mask = 1 - mask
     return imgs, flow_file, mask
@@ -39,7 +40,7 @@ def image_flow_mask_loader(path_imgs, path_flo, mask_path):
 
 class ListDataset(data.Dataset):
     def __init__(self, root, path_list, source_image_transform=None, target_image_transform=None, flow_transform=None,
-                 co_transform=None, loader=image_flow_loader, mask=False, size=False):
+                 co_transform=None, loader=image_flow_mask_loader, mask=False, size=False):
         """
 
         :param root: directory containing the dataset images
@@ -86,10 +87,10 @@ class ListDataset(data.Dataset):
             mask = get_gt_correspondence_mask(gt_flow)
         else:
             if self.size:
-                inputs, gt_flow, mask, source_size = self.loader(self.root, inputs, gt_flow, occ_mask)
+                inputs, gt_flow, mask, source_size = self.loader(self.root, inputs, gt_flow)
             else:
                 # loader comes with a mask of valid correspondences
-                inputs, gt_flow, mask = self.loader(self.root, inputs, gt_flow, occ_mask)
+                inputs, gt_flow, mask = self.loader(self.root, inputs, gt_flow)
                 source_size = inputs[0].shape
             # mask is shape hxw
             if self.co_transform is not None:
