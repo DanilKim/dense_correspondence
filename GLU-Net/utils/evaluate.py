@@ -105,13 +105,11 @@ def calculate_epe_and_pck_per_dataset(test_dataloader, network, device, threshol
         flow_est_y = flow_estimated.permute(0, 2, 3, 1)[:, :, :, 1]
 
         flow_target = \
-            torch.cat(((flow_target_x * mask_gt.float()).unsqueeze(1),
-                       (flow_target_y * mask_gt.float()).unsqueeze(1)), dim=1)
+            torch.cat((flow_target_x[mask_gt.byte()].unsqueeze(1),
+                       flow_target_y[mask_gt.byte()].unsqueeze(1)), dim=1)
         flow_est = \
-            torch.cat(((flow_est_x * mask_gt.float()).unsqueeze(1),
-                       (flow_est_y * mask_gt.float()).unsqueeze(1)), dim=1)
-        # flow_target_x[mask_gt].shape is (number of pixels), then with unsqueze(1) it becomes (number_of_pixels, 1)
-        # final shape is (B*H*W , 2), B*H*W is the number of registered pixels (according to ground truth masks)
+            torch.cat((flow_est_x[mask_gt.byte()].unsqueeze(1),
+                       flow_est_y[mask_gt.byte()].unsqueeze(1)), dim=1)
 
         # let's calculate EPE per batch
         aepe = epe(flow_est, flow_target)  # you obtain the mean per pixel

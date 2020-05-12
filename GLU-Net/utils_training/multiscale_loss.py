@@ -159,16 +159,10 @@ def realEPE(output, target, mask_gt, ratio_x=None, ratio_y=None, sparse=False, m
     flow_est_x = upsampled_output.permute(0, 2, 3, 1)[:, :, :, 0]  # BxH_xW_
     flow_est_y = upsampled_output.permute(0, 2, 3, 1)[:, :, :, 1]
 
-    flow_target_x_mul = flow_target_x * mask_gt.float()
-    flow_target_y_mul = flow_target_y * mask_gt.float()
-
-    flow_est_x_mul = flow_est_x * mask_gt.float()
-    flow_est_y_mul = flow_est_y * mask_gt.float()
-
     flow_target = \
-        torch.cat((flow_target_x_mul.unsqueeze(1),
-                   flow_target_y_mul.unsqueeze(1)), dim=1)
+        torch.cat((flow_target_x[mask_gt.byte()].unsqueeze(1),
+                   flow_target_y[mask_gt.byte()].unsqueeze(1)), dim=1)
     flow_est = \
-        torch.cat((flow_est_x_mul.unsqueeze(1),
-                   flow_est_y_mul.unsqueeze(1)), dim=1)
-    return EPE_VALID(flow_est, flow_target, sparse, mean=mean, sum=sum, mask=mask_gt)
+        torch.cat((flow_est_x[mask_gt.byte()].unsqueeze(1),
+                   flow_est_y[mask_gt.byte()].unsqueeze(1)), dim=1)
+    return EPE(flow_est, flow_target, sparse, mean=mean, sum=sum)
