@@ -34,7 +34,8 @@ def EPE_VALID(input_flow, target_flow, sparse=False, mean=True, sum=False, mask=
         for nth in range(0, np.shape(EPE_map)[0]): # per each batch size, 
             summation = torch.sum(EPE_map[nth, :, :])
             mask_sum = (mask[nth, : , :] == 1).sum()
-            SUM_L.append(summation / mask_sum)
+            if mask_sum != 0:
+                SUM_L.append(summation / mask_sum)
         return torch.mean(torch.Tensor(SUM_L))
     elif sum:
         return EPE_map.sum()
