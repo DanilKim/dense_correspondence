@@ -60,7 +60,7 @@ if __name__ == "__main__":
                         help='div flow')
     parser.add_argument('--seed', type=int, default=1986,
                         help='Pseudo-RNG seed')
-    parser.add_argument('--transform_type', type=str, default='raw', help='transform type (raw - for raw data, random - random_crop, center - resize)'))
+    parser.add_argument('--transform_type', type=str, default='raw', help='transform type (raw - for raw data, random - random_crop, center - resize)')
     parser.add_argument('--crop_size', type=int, default=512, help='size for crop(square)')
     parser.add_argument('--check_gt', type=bool, default=False, help='flag for check gt pairs')
 
