@@ -10,7 +10,34 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset
-from datasets.util import center_crop
+from datasets.util import center_crop, load_flo
+
+
+def warp(x, flo):
+    C, H, W = x.size()
+    x = x.float().unsqueeze(0)
+    # mesh grid
+    xx = torch.arange(0, W).view(1, -1).repeat(H, 1)
+    yy = torch.arange(0, H).view(-1, 1).repeat(1, W)
+    xx = xx.view(1, 1, H, W).repeat(1, 1, 1, 1)
+    yy = yy.view(1, 1, H, W).repeat(1, 1, 1, 1)
+    grid = torch.cat((xx, yy), 1).float()
+
+    vgrid = grid + flo
+    # makes a mapping out of the flow
+
+    # scale grid to [-1,1]
+    vgrid[:, 0, :, :] = 2.0 * vgrid[:, 0, :, :].clone() / max(W - 1, 1) - 1.0
+    vgrid[:, 1, :, :] = 2.0 * vgrid[:, 1, :, :].clone() / max(H - 1, 1) - 1.0
+
+    vgrid = vgrid.permute(0, 2, 3, 1)
+    output = nn.functional.grid_sample(x, vgrid)
+    mask = torch.ones(x.size())
+    mask = nn.functional.grid_sample(mask, vgrid)
+
+    mask[mask < 0.9999] = 0
+    mask[mask > 0] = 1
+    return output.squeeze(0), mask.squeeze(0)
 
 
 def unormalise_and_convert_mapping_to_flow(map, output_channel_first=True):
@@ -143,6 +170,7 @@ class HomoAffTps_Dataset(Dataset):
                  csv_file,
                  transforms,
                  transforms_target=None,
+                 source_flow=False,
                  get_flow=False,
                  pyramid_param=[520],
                  output_size=(520,520)):
@@ -164,6 +192,7 @@ class HomoAffTps_Dataset(Dataset):
                 raise ValueError("The csv file that you indicated is empty !")
         else:
             raise ValueError("The path to the csv file that you indicated does not exist !")
+        self.source_flow = source_flow
         self.get_flow = get_flow
         self.H_OUT, self.W_OUT = output_size
 
@@ -291,6 +320,28 @@ class HomoAffTps_Dataset(Dataset):
                                 2)
         return image_batch
 
+    def plot_flow(self, source_src, source_img, source_flow, source_mask):
+        from matplotlib import pyplot as plt
+        from utils.pixel_wise_mapping import remap_using_flow_fields
+        fig, axis = plt.subplots(3, 1, figsize=(20, 20))
+        axis[0].imshow(source_src)
+        axis[0].set_title("Image source")
+        axis[1].imshow(source_img)
+        axis[1].set_title("Image intermediate")
+        # remapped_of = remap_using_flow_fields(source_img, source_flow[:, :, 0], source_flow[:, :, 1])
+        remapped_of, rm = warp(torch.Tensor(source_img).permute(2, 0, 1).unsqueeze(0),
+                               torch.Tensor(source_flow).permute(2, 0, 1).unsqueeze(0))
+        remapped_of = (remapped_of * rm).squeeze(0).permute(1, 2, 0).numpy().astype(np.uint8)
+        axis[2].imshow(remapped_of * source_mask.astype(np.uint8))
+        p_dist = torch.norm(torch.Tensor(
+            (remapped_of.astype(np.float32) - source_src.astype(np.float32)) * source_mask.astype(np.int32)), dim=2,
+                            p=2)
+        outliers = p_dist > 40
+        epe = torch.sum(p_dist) / source_mask.astype(np.int32).sum()
+        outlier_ratio = outliers.float().sum() / source_mask.astype(np.int32).sum()
+        axis[2].set_title("Warped source image (%f / %f)" % (epe, outlier_ratio))
+        plt.show()
+
     def __len__(self):
         return len(self.df)
 
@@ -303,16 +354,38 @@ class HomoAffTps_Dataset(Dataset):
             raise ValueError("The path to one of the original image {} does not exist, check your image path "
                              "and your csv file !".format(source_img_name))
 
+        # get flow
+        if self.source_flow:
+            source_dir_name = osp.dirname(data.fname)
+            source_img_name = osp.join(self.img_path, source_dir_name, 'target.png')
+            source_src_name = osp.join(self.img_path, source_dir_name, 'source.png')
+            source_flow_name = osp.join(self.img_path, source_dir_name, 'flow.flo')
+            source_mask_name = osp.join(self.img_path, source_dir_name, 'occlusion.png')
+
+            source_src = cv2.cvtColor(cv2.imread(source_src_name),
+                                      cv2.COLOR_BGR2RGB)
+            source_flow = load_flo(source_flow_name)
+            source_mask = cv2.imread(source_mask_name)
+            source_mask = (1 - source_mask/255)
+
+
         # aff/tps transformations
         if transform_type == 0 or transform_type == 1:
             # read image
             source_img = cv2.cvtColor(cv2.imread(source_img_name),
                                       cv2.COLOR_BGR2RGB)
 
-            # cropping dimention of the image first if it is too big, would occur to big resizing after
+            # cropping dimension of the image first if it is too big, would occur to big resizing after
             if source_img.shape[0] > self.H_AFF_TPS*self.ratio_cropping or \
                source_img.shape[1] > self.W_AFF_TPS*self.ratio_cropping:
                 source_img, x, y = center_crop(source_img, (int(self.W_AFF_TPS*self.ratio_cropping),
+                                                            int(self.H_AFF_TPS*self.ratio_cropping)))
+                if self.source_flow:
+                    source_src, _, _  = center_crop(source_src, (int(self.W_AFF_TPS * self.ratio_cropping),
+                                                                  int(self.H_AFF_TPS * self.ratio_cropping)))
+                    source_flow, _, _ = center_crop(source_flow, (int(self.W_AFF_TPS*self.ratio_cropping),
+                                                            int(self.H_AFF_TPS*self.ratio_cropping)))
+                    source_mask, _, _ = center_crop(source_mask, (int(self.W_AFF_TPS*self.ratio_cropping),
                                                             int(self.H_AFF_TPS*self.ratio_cropping)))
 
             if transform_type == 0:
@@ -326,6 +399,13 @@ class HomoAffTps_Dataset(Dataset):
 
             # make arrays float tensor for subsequent processing
             image = torch.Tensor(source_img.astype(np.float32))
+            if self.source_flow:
+                source_src  = torch.Tensor(source_src.astype(np.float32))
+                source_src  = source_src.transpose(1, 2).transpose(0, 1)
+                source_flow = torch.Tensor(source_flow.astype(np.float32))
+                source_flow = source_flow.transpose(1, 2).transpose(0, 1)
+                source_mask = torch.Tensor(source_mask.astype(np.float32))
+                source_mask = source_mask.transpose(1, 2).transpose(0, 1)
 
             if image.numpy().ndim == 2:
                 image = \
@@ -352,10 +432,36 @@ class HomoAffTps_Dataset(Dataset):
                                      padding_factor=0.8,
                                      crop_factor=9/16,
                                      theta=theta).squeeze().numpy()
+            if self.source_flow:
+                src_pad  = self.transform_image(source_src.unsqueeze(0), self.H_AFF_TPS, self.W_AFF_TPS)
+                flow_pad = self.transform_image(source_flow.unsqueeze(0), self.H_AFF_TPS, self.W_AFF_TPS)
+                mask_pad = self.transform_image(source_mask.unsqueeze(0), self.H_AFF_TPS, self.W_AFF_TPS)
+                src_src_crop = \
+                    self.transform_image(src_pad,
+                                         self.H_OUT,
+                                         self.W_OUT,
+                                         padding_factor=0.8,
+                                         crop_factor=9 / 16).squeeze().numpy()
+                flow_src_crop = \
+                    self.transform_image(flow_pad,
+                                         self.H_OUT,
+                                         self.W_OUT,
+                                         padding_factor=0.8,
+                                         crop_factor=9 / 16).squeeze().numpy()
+                mask_src_crop = \
+                    self.transform_image(mask_pad,
+                                         self.H_OUT,
+                                         self.W_OUT,
+                                         padding_factor=0.8,
+                                         crop_factor=9 / 16).squeeze().numpy()
 
             # convert to [H, W, C] convention (for np arrays)
             img_src_crop = img_src_crop.transpose((1, 2, 0))
             img_target_crop = img_target_crop.transpose((1, 2, 0))
+            if self.source_flow:
+                src_src_crop = src_src_crop.transpose((1, 2, 0))
+                flow_src_crop = flow_src_crop.transpose((1, 2, 0))
+                mask_src_crop = mask_src_crop.transpose((1, 2, 0))
 
         # Homography transformation
         elif transform_type == 2:
@@ -369,14 +475,36 @@ class HomoAffTps_Dataset(Dataset):
                     or source_img.shape[1] > self.W_HOMO*self.ratio_cropping:
                 source_img, x, y = center_crop(source_img, (int(self.W_HOMO*self.ratio_cropping),
                                                             int(self.H_HOMO*self.ratio_cropping)))
+                print('yes')
+                if self.source_flow:
+                    source_src, _, _  = center_crop(source_src, (int(self.W_AFF_TPS * self.ratio_cropping),
+                                                                int(self.H_AFF_TPS * self.ratio_cropping)))
+                    source_flow, _, _ = center_crop(source_flow, (int(self.W_AFF_TPS * self.ratio_cropping),
+                                                              int(self.H_AFF_TPS * self.ratio_cropping)))
+                    source_mask, _, _ = center_crop(source_mask, (int(self.W_AFF_TPS * self.ratio_cropping),
+                                                              int(self.H_AFF_TPS * self.ratio_cropping)))
 
             # resize to value stated at the beginning
             img_src_orig = cv2.resize(source_img, dsize=(self.W_HOMO, self.H_HOMO),
                                       interpolation=cv2.INTER_LINEAR) # cv2.resize, W is giving first
+            if self.source_flow:
+                src_src_orig  = cv2.resize(source_src, dsize=(self.W_HOMO, self.H_HOMO),
+                                           interpolation=cv2.INTER_LINEAR)
+                flow_src_orig = cv2.resize(source_flow, dsize=(self.W_HOMO, self.H_HOMO),
+                                           interpolation=cv2.INTER_LINEAR)
+                mask_src_orig = cv2.resize(source_mask, dsize=(self.W_HOMO, self.H_HOMO),
+                                           interpolation=cv2.INTER_LINEAR)
 
             # get a central crop:
             img_src_crop, x1_crop, y1_crop = center_crop(img_src_orig,
-                                                         self.W_OUT)
+                                                         (self.W_OUT, self.H_OUT))
+            if self.source_flow:
+                src_src_crop, _, _  = center_crop(src_src_orig,
+                                                  (self.W_OUT, self.H_OUT))
+                flow_src_crop, _, _ = center_crop(flow_src_orig,
+                                                  (self.W_OUT, self.H_OUT))
+                mask_src_crop, _, _ = center_crop(mask_src_orig,
+                                                  (self.W_OUT, self.H_OUT))
 
             # Obtaining the full and crop grids out of H
             grid_full, grid_crop = self.get_grid(theta,
@@ -392,26 +520,31 @@ class HomoAffTps_Dataset(Dataset):
 
             # get the central crop of the target image
             img_target_crop, _, _ = center_crop(img_orig_target_vrbl.numpy(),
-                                                self.W_OUT)
+                                                (self.W_OUT, self.H_OUT))
 
         else:
             print('Error: transformation type')
 
-        if self.transforms_source is not None and self.transforms_target is not None:
-            cropped_source_image = \
-                self.transforms_source(img_src_crop.astype(np.uint8))
-            cropped_target_image = \
-                self.transforms_target(img_target_crop.astype(np.uint8))
-        else:
+        if self.transforms_source is None or self.transforms_target is None:
             # if no specific transformations are applied, they are just put in 3xHxW
-            cropped_source_image = \
-                torch.Tensor(img_src_crop.astype(np.float32))
-            cropped_target_image = \
-                torch.Tensor(img_target_crop.astype(np.float32))
+            from utils.image_transforms import ArrayToTensor
+            self.transform_source = ArrayToTensor
+            transType = np.unit8
+        else:
+            transType = np.float32
 
-            # convert to [C, H, W] convention (for tensors)
-            cropped_source_image = cropped_source_image.permute(-1, 0, 1)
-            cropped_target_image = cropped_target_image.permute(-1, 0, 1)
+        cropped_source_image = \
+            self.transforms_source(img_src_crop.astype(transType))
+        cropped_target_image = \
+            self.transforms_target(img_target_crop.astype(transType))
+        if self.source_flow:
+            cropped_source_src = \
+                self.transforms_source(src_src_crop.astype(transType))
+            cropped_source_flow = \
+                self.transforms_source(flow_src_crop.astype(transType))
+            cropped_source_mask = \
+                self.transforms_source(mask_src_crop.astype(transType))
+
 
         # construct a pyramid with a corresponding grid on each layer
         grid_pyramid = []
@@ -448,7 +581,7 @@ class HomoAffTps_Dataset(Dataset):
                 mask_x.append(mask[:, :, 0])
                 mask_y.append(mask[:, :, 1])
 
-        if self.get_flow:
+        if self.get_flow and not self.source_flow:
             # ATTENTION, here we just get the flow of the highest resolution asked, not the pyramid of flows !
             flow = unormalise_and_convert_mapping_to_flow(grid_pyramid[-1], output_channel_first=True)
             return {'source_image': cropped_source_image,
@@ -456,6 +589,26 @@ class HomoAffTps_Dataset(Dataset):
                     'flow_map': flow, # here flow map is 2 x h x w
                     'correspondence_mask': np.logical_and(mask_x[-1].detach().numpy(),
                                                           mask_y[-1].detach().numpy()).astype(np.uint8)}
+        elif self.get_flow and self.source_flow:
+            # ATTENTION, here we just get the flow of the highest resolution asked, not the pyramid of flows !
+            flow = unormalise_and_convert_mapping_to_flow(grid_pyramid[-1], output_channel_first=True)
+            w_flow, w_mask = warp(flow, cropped_source_flow)
+            flow_map       = w_flow + cropped_source_flow
+            mask_x, _      = warp(mask_x[-1].unsqueeze(0), cropped_source_flow)
+            mask_y, _      = warp(mask_y[-1].unsqueeze(0), cropped_source_flow)
+            _, final_mask  = warp(flow_map, flow_map)
+            return {'source_image': cropped_source_src,
+                    'intermediate_image': cropped_source_image,
+                    'flow_of': cropped_source_flow,
+                    'target_image': cropped_target_image,
+                    'flow_gt': flow,
+                    'flow_map': flow_map,  # here flow map is 2 x h x w
+                    'correspondence_mask':  (mask_x[-1] * mask_y[-1] * cropped_source_mask[0] * w_mask[0] * final_mask[0]).detach().numpy()}
+                        #np.logical_and.reduce(mask_x[-1].detach().numpy().astype(np.uint8),
+                        #                                         mask_y[-1].detach().numpy().astype(np.uint8),
+                        #                                         cropped_source_mask[0].detach().numpy().astype(np.uint8),
+                        #                                         w_mask[0].detach().numpy().astype(np.uint8),
+                        #                                         final_mask[0].detach().numpy().astype(np.uint8))}
         else:
             # here we get both the pyramid of mappings and the last mapping (at the highest resolution)
             return {'source_image': cropped_source_image,

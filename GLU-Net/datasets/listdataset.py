@@ -27,15 +27,11 @@ def image_flow_loader(root, path_imgs, path_flo):
     return [imread(img).astype(np.uint8) for img in imgs], load_flo(flo)
 
 
-def image_flow_mask_loader(root, path_imgs, path_flo):
-    imgs=[]
-    for img in path_imgs:
-        imgs.append(imread(img).astype(np.uint8))
-    flow_file = load_flo(path_flo)
-    mask_path = os.path.join('/'.join(path_flo.split('/')[:-1]), 'occlusion.png')
-    mask = imread(mask_path).astype(np.float32)/255
-    mask = 1 - mask
-    return imgs, flow_file, mask
+def image_flow_mask_loader(root, path_imgs, path_flo, path_mask):
+    imgs = [os.path.join(root, path) for path in path_imgs]
+    flo = os.path.join(root, path_flo)
+    mask = os.path.join(root, path_mask)
+    return [imread(img).astype(np.uint8) for img in imgs], load_flo(flo), 1 - imread(mask).astype(np.float32)/255
 
 
 class ListDataset(data.Dataset):
@@ -72,8 +68,8 @@ class ListDataset(data.Dataset):
 
     def __getitem__(self, index):
         # for all inputs[0] must be the source and inputs[1] must be the target
-        #inputs, gt_flow, occ_mask = self.path_list[index]
-        inputs, gt_flow = self.path_list[index]
+        inputs, gt_flow, occ_mask = self.path_list[index]
+        #inputs, gt_flow = self.path_list[index]
 
         if not self.mask:
             if self.size:
@@ -87,10 +83,10 @@ class ListDataset(data.Dataset):
             mask = get_gt_correspondence_mask(gt_flow)
         else:
             if self.size:
-                inputs, gt_flow, mask, source_size = self.loader(self.root, inputs, gt_flow)
+                inputs, gt_flow, mask, source_size = self.loader(self.root, inputs, gt_flow, occ_mask)
             else:
                 # loader comes with a mask of valid correspondences
-                inputs, gt_flow, mask = self.loader(self.root, inputs, gt_flow)
+                inputs, gt_flow, mask = self.loader(self.root, inputs, gt_flow, occ_mask)
                 source_size = inputs[0].shape
             # mask is shape hxw
             if self.co_transform is not None:

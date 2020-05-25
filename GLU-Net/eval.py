@@ -57,7 +57,6 @@ torch.set_grad_enabled(False) # make sure to not compute gradients for computati
 torch.backends.cudnn.enabled = True
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # either gpu or cpu
 
-
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)
 

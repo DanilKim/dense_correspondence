@@ -11,17 +11,20 @@ from .mod import CMDTop
 from models.our_models.mod import OpticalFlowEstimator, FeatureL2Norm, warp, \
     CorrelationVolume, deconv, conv, predict_flow, unnormalise_and_convert_mapping_to_flow
 from models.our_models.consensus_network_modules import MutualMatching, NeighConsensus, FeatureCorrelation
-os.environ['PYTHON_EGG_CACHE'] = 'tmp/' # a writable directory 
+
+os.environ['PYTHON_EGG_CACHE'] = 'tmp/'  # a writable directory
 try:
-	from models.correlation import correlation # the custom cost volume layer
+    from models.correlation import correlation  # the custom cost volume layer
 except:
-	sys.path.insert(0, './correlation'); import correlation # you should consider upgrading python
+    sys.path.insert(0, './correlation');
+    import correlation  # you should consider upgrading python
 
 
 class SemanticGLUNet_model(nn.Module):
     """
     Semantic-GLU-Net
     """
+
     def __init__(self, evaluation, div=1.0, batch_norm=True, pyramid_type='VGG', md=4,
                  cyclic_consistency=False, consensus_network=True, iterative_refinement=False):
         """
@@ -29,7 +32,7 @@ class SemanticGLUNet_model(nn.Module):
 
         """
         super(SemanticGLUNet_model, self).__init__()
-        self.div=div
+        self.div = div
         self.pyramid_type = pyramid_type
         self.leakyRELU = nn.LeakyReLU(0.1)
         self.iterative_refinement = iterative_refinement
@@ -51,44 +54,44 @@ class SemanticGLUNet_model(nn.Module):
         # L2 feature normalisation
         self.l2norm = FeatureL2Norm()
 
-        dd = np.cumsum([128,128,96,64,32])
+        dd = np.cumsum([128, 128, 96, 64, 32])
         # weights for decoder at different levels
-        nd = 16*16 # global correlation
+        nd = 16 * 16  # global correlation
         od = nd + 2
         self.decoder4 = CMDTop(in_channels=od, bn=batch_norm)
         self.deconv4 = deconv(2, 2, kernel_size=4, stride=2, padding=1)
 
-        nd = (2*md+1)**2 # constrained correlation, 4 pixels on each side
+        nd = (2 * md + 1) ** 2  # constrained correlation, 4 pixels on each side
         od = nd + 2
         self.decoder3 = OpticalFlowEstimator(in_channels=od, batch_norm=batch_norm)
 
         # weights for refinement module
-        self.dc_conv1 = conv(od+dd[4], 128, kernel_size=3, stride=1, padding=1,  dilation=1, batch_norm=batch_norm)
-        self.dc_conv2 = conv(128,      128, kernel_size=3, stride=1, padding=2,  dilation=2, batch_norm=batch_norm)
-        self.dc_conv3 = conv(128,      128, kernel_size=3, stride=1, padding=4,  dilation=4, batch_norm=batch_norm)
-        self.dc_conv4 = conv(128,      96,  kernel_size=3, stride=1, padding=8,  dilation=8, batch_norm=batch_norm)
-        self.dc_conv5 = conv(96,       64,  kernel_size=3, stride=1, padding=16, dilation=16, batch_norm=batch_norm)
-        self.dc_conv6 = conv(64,       32,  kernel_size=3, stride=1, padding=1,  dilation=1, batch_norm=batch_norm)
+        self.dc_conv1 = conv(od + dd[4], 128, kernel_size=3, stride=1, padding=1, dilation=1, batch_norm=batch_norm)
+        self.dc_conv2 = conv(128, 128, kernel_size=3, stride=1, padding=2, dilation=2, batch_norm=batch_norm)
+        self.dc_conv3 = conv(128, 128, kernel_size=3, stride=1, padding=4, dilation=4, batch_norm=batch_norm)
+        self.dc_conv4 = conv(128, 96, kernel_size=3, stride=1, padding=8, dilation=8, batch_norm=batch_norm)
+        self.dc_conv5 = conv(96, 64, kernel_size=3, stride=1, padding=16, dilation=16, batch_norm=batch_norm)
+        self.dc_conv6 = conv(64, 32, kernel_size=3, stride=1, padding=1, dilation=1, batch_norm=batch_norm)
         self.dc_conv7 = predict_flow(32)
 
         # 1/8 of original resolution
-        nd = (2*md+1)**2 # constrained correlation, 4 pixels on each side
+        nd = (2 * md + 1) ** 2  # constrained correlation, 4 pixels on each side
         od = nd + 2  # only gets the upsampled flow
         self.decoder2 = OpticalFlowEstimator(in_channels=od, batch_norm=batch_norm)
         self.deconv2 = deconv(2, 2, kernel_size=4, stride=2, padding=1)
-        self.upfeat2 = deconv(od+dd[4], 2, kernel_size=4, stride=2, padding=1)
+        self.upfeat2 = deconv(od + dd[4], 2, kernel_size=4, stride=2, padding=1)
 
         # 1/4 of original resolution
-        nd = (2*md+1)**2 # constrained correlation, 4 pixels on each side
+        nd = (2 * md + 1) ** 2  # constrained correlation, 4 pixels on each side
         od = nd + 4
         self.decoder1 = OpticalFlowEstimator(in_channels=od, batch_norm=batch_norm)
 
-        self.l_dc_conv1 = conv(od+dd[4], 128, kernel_size=3, stride=1, padding=1,  dilation=1, batch_norm=batch_norm)
-        self.l_dc_conv2 = conv(128,      128, kernel_size=3, stride=1, padding=2,  dilation=2, batch_norm=batch_norm)
-        self.l_dc_conv3 = conv(128,      128, kernel_size=3, stride=1, padding=4,  dilation=4, batch_norm=batch_norm)
-        self.l_dc_conv4 = conv(128,      96,  kernel_size=3, stride=1, padding=8,  dilation=8, batch_norm=batch_norm)
-        self.l_dc_conv5 = conv(96,       64,  kernel_size=3, stride=1, padding=16, dilation=16, batch_norm=batch_norm)
-        self.l_dc_conv6 = conv(64,       32,  kernel_size=3, stride=1, padding=1,  dilation=1, batch_norm=batch_norm)
+        self.l_dc_conv1 = conv(od + dd[4], 128, kernel_size=3, stride=1, padding=1, dilation=1, batch_norm=batch_norm)
+        self.l_dc_conv2 = conv(128, 128, kernel_size=3, stride=1, padding=2, dilation=2, batch_norm=batch_norm)
+        self.l_dc_conv3 = conv(128, 128, kernel_size=3, stride=1, padding=4, dilation=4, batch_norm=batch_norm)
+        self.l_dc_conv4 = conv(128, 96, kernel_size=3, stride=1, padding=8, dilation=8, batch_norm=batch_norm)
+        self.l_dc_conv5 = conv(96, 64, kernel_size=3, stride=1, padding=16, dilation=16, batch_norm=batch_norm)
+        self.l_dc_conv6 = conv(64, 32, kernel_size=3, stride=1, padding=1, dilation=1, batch_norm=batch_norm)
         self.l_dc_conv7 = predict_flow(32)
 
         for m in self.modules():
@@ -102,7 +105,7 @@ class SemanticGLUNet_model(nn.Module):
         else:
             self.pyramid = VGGPyramid()
 
-        self.evaluation=evaluation
+        self.evaluation = evaluation
 
     def pre_process_data(self, source_img, target_img, device, apply_flip=False):
         '''
@@ -136,17 +139,17 @@ class SemanticGLUNet_model(nn.Module):
             target_img_original = target_img
             target_img = []
             for i in range(b):
-                transformed_image = np.fliplr(target_img_original[i].cpu().permute(1,2,0).numpy())
+                transformed_image = np.fliplr(target_img_original[i].cpu().permute(1, 2, 0).numpy())
                 target_img.append(transformed_image)
 
             target_img = torch.from_numpy(np.uint8(target_img)).permute(0, 3, 1, 2)
 
         source_img_copy = torch.nn.functional.interpolate(input=source_img.float().to(device),
-                                                     size=(int_preprocessed_height, int_preprocessed_width),
-                                                     mode='area').byte()
+                                                          size=(int_preprocessed_height, int_preprocessed_width),
+                                                          mode='area').byte()
         target_img_copy = torch.nn.functional.interpolate(input=target_img.float().to(device),
-                                                     size=(int_preprocessed_height, int_preprocessed_width),
-                                                     mode='area').byte()
+                                                          size=(int_preprocessed_height, int_preprocessed_width),
+                                                          mode='area').byte()
         source_img_copy = source_img_copy.float().div(255.0)
         target_img_copy = target_img_copy.float().div(255.0)
         mean = torch.as_tensor(mean_vector, dtype=source_img_copy.dtype, device=source_img_copy.device)
@@ -156,26 +159,27 @@ class SemanticGLUNet_model(nn.Module):
 
         # resolution 256x256
         source_img_256 = torch.nn.functional.interpolate(input=source_img.float().to(device),
-                                                          size=(256, 256),
-                                                          mode='area').byte()
+                                                         size=(256, 256),
+                                                         mode='area').byte()
         target_img_256 = torch.nn.functional.interpolate(input=target_img.float().to(device),
-                                                          size=(256, 256),
-                                                          mode='area').byte()
+                                                         size=(256, 256),
+                                                         mode='area').byte()
 
         source_img_256 = source_img_256.float().div(255.0)
         target_img_256 = target_img_256.float().div(255.0)
         source_img_256.sub_(mean[:, None, None]).div_(std[:, None, None])
         target_img_256.sub_(mean[:, None, None]).div_(std[:, None, None])
 
-        ratio_x = float(w_original)/float(int_preprocessed_width)
-        ratio_y = float(h_original)/float(int_preprocessed_height)
+        ratio_x = float(w_original) / float(int_preprocessed_width)
+        ratio_y = float(h_original) / float(int_preprocessed_height)
 
-        return source_img_copy.to(device), target_img_copy.to(device), source_img_256.to(device), target_img_256.to(device), \
+        return source_img_copy.to(device), target_img_copy.to(device), source_img_256.to(device), target_img_256.to(
+            device), \
                ratio_x, ratio_y, h_original, w_original
 
     def flipping_condition(self, im_source_base, im_target_base, device):
         # should only happen during evaluation
-        target_image_is_flipped = False # for training
+        target_image_is_flipped = False  # for training
         if not self.evaluation:
             raise ValueError('Flipping condition should only happen during evaluation')
         else:
@@ -236,7 +240,7 @@ class SemanticGLUNet_model(nn.Module):
         self.target_image_is_flipped = target_image_is_flipped
         im_source, im_target, im_source_256, im_target_256, ratio_x, ratio_y, \
         h_original, w_original = self.pre_process_data(im_source_base, im_target_base,
-                                                                 apply_flip=target_image_is_flipped, device=device)
+                                                       apply_flip=target_image_is_flipped, device=device)
         return im_source.to(device), im_target.to(device), im_source_256.to(device), im_target_256.to(device), \
                ratio_x, ratio_y, h_original, w_original
 
@@ -283,9 +287,9 @@ class SemanticGLUNet_model(nn.Module):
         with torch.no_grad():
             im1_pyr = self.pyramid(im_target, eigth_resolution=True)
             im2_pyr = self.pyramid(im_source, eigth_resolution=True)
-            c11 = im1_pyr[-2] # size original_res/4xoriginal_res/4
+            c11 = im1_pyr[-2]  # size original_res/4xoriginal_res/4
             c21 = im2_pyr[-2]
-            c12 = im1_pyr[-1] # size original_res/8xoriginal_res/8
+            c12 = im1_pyr[-1]  # size original_res/8xoriginal_res/8
             c22 = im2_pyr[-1]
 
             # pyramid, 256 reso
@@ -329,15 +333,15 @@ class SemanticGLUNet_model(nn.Module):
         if self.evaluation and self.iterative_refinement:
             # from 32x32 resolution, if upsampling to 1/8*original resolution is too big,
             # do iterative upsampling so that gap is always smaller than 2.
-            R_w = float(w_original)/8.0/32.0
-            R_h = float(h_original)/8.0/32.0
+            R_w = float(w_original) / 8.0 / 32.0
+            R_h = float(h_original) / 8.0 / 32.0
             if R_w > R_h:
                 R = R_w
             else:
                 R = R_h
 
             minimum_ratio = 3.0
-            nbr_extra_layers = max(0, int(round(np.log(R/minimum_ratio)/np.log(2))))
+            nbr_extra_layers = max(0, int(round(np.log(R / minimum_ratio) / np.log(2))))
 
             if nbr_extra_layers == 0:
                 flow3[:, 0, :, :] *= float(w_original) / float(256)
@@ -348,12 +352,16 @@ class SemanticGLUNet_model(nn.Module):
                 flow3[:, 0, :, :] *= float(w_original) / float(256)
                 flow3[:, 1, :, :] *= float(h_original) / float(256)
                 for n in range(nbr_extra_layers):
-                    ratio = 1.0 / (8.0 * 2 ** (nbr_extra_layers - n ))
+                    ratio = 1.0 / (8.0 * 2 ** (nbr_extra_layers - n))
                     up_flow3 = F.interpolate(input=flow3, size=(int(h_original * ratio), int(w_original * ratio)),
                                              mode='bilinear',
                                              align_corners=False)
-                    c23_bis = torch.nn.functional.interpolate(c22, size=(int(h_original * ratio), int(w_original * ratio)), mode='area')
-                    c13_bis = torch.nn.functional.interpolate(c12, size=(int(h_original * ratio), int(w_original * ratio)), mode='area')
+                    c23_bis = torch.nn.functional.interpolate(c22,
+                                                              size=(int(h_original * ratio), int(w_original * ratio)),
+                                                              mode='area')
+                    c13_bis = torch.nn.functional.interpolate(c12,
+                                                              size=(int(h_original * ratio), int(w_original * ratio)),
+                                                              mode='area')
                     warp3 = warp(c23_bis, up_flow3 * div * ratio)
                     corr3 = correlation.FunctionCorrelation(tensorFirst=c13_bis, tensorSecond=warp3)
                     corr3 = self.leakyRELU(corr3)
@@ -374,8 +382,8 @@ class SemanticGLUNet_model(nn.Module):
 
         # ORIGINAL RESOLUTION
         # level 1/8 of original resolution
-        ratio = 1.0/8.0
-        warp2 = warp(c22, up_flow3*div*ratio)
+        ratio = 1.0 / 8.0
+        warp2 = warp(c22, up_flow3 * div * ratio)
         corr2 = correlation.FunctionCorrelation(tensorFirst=c12, tensorSecond=warp2)
         corr2 = self.leakyRELU(corr2)
         corr2 = torch.cat((corr2, up_flow3), 1)
@@ -386,7 +394,7 @@ class SemanticGLUNet_model(nn.Module):
 
         # level 1/4 of original resolution
         ratio = 1.0 / 4.0
-        warp1 = warp(c21, up_flow2*div*ratio)
+        warp1 = warp(c21, up_flow2 * div * ratio)
         corr1 = correlation.FunctionCorrelation(tensorFirst=c11, tensorSecond=warp1)
         corr1 = self.leakyRELU(corr1)
         corr1 = torch.cat((corr1, up_flow2, up_feat2), 1)
