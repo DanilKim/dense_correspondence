@@ -86,7 +86,7 @@ def resize(img, size):
     result = cv2.resize(img, dsize=(size, size), interpolation=cv2.INTER_LINEAR)
     return np.asarray(result)
 
-def center_crop(img, size):
+def center_crop(img, size, in_listdataset=False):
     """
     Get the center crop of the input image
     Args:
@@ -122,8 +122,10 @@ def center_crop(img, size):
     x1 = w // 2 - size[0] // 2
     y1 = h // 2 - size[1] // 2
 
-    img_pad = img_pad[y1:y1 + size[1], x1:x1 + size[0], :]
-
+    if len(img.shape)==3 :
+        img_pad = img_pad[y1:y1 + size[1], x1:x1 + size[0], :]
+    else: 
+        img_pad = img_pad[y1:y1 + size[1], x1:x1 + size[0]]
     return img_pad, x1, y1
 
 def get_mapping_horizontal_flipping(image):

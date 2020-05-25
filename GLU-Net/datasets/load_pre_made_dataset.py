@@ -104,7 +104,7 @@ def PreMadeDataset_rework(root,  source_image_transform=None, target_image_trans
     root = os.path.dirname(sub_root)
     train_dataset = ListDataset(root, train_list, source_image_transform=source_image_transform,
                                 target_image_transform=target_image_transform, mask=True,
-                                flow_transform=flow_transform, co_transform=co_transform, transform_type = transform_type)
+                                flow_transform=flow_transform, co_transform=co_transform, transform_type = transform_type, crop_size=crop_size,)
     test_dataset = ListDataset(root = root,  crop_size=crop_size, path_list = test_list, source_image_transform=source_image_transform,
                                target_image_transform=target_image_transform, mask=True,
                                flow_transform=flow_transform, co_transform=co_transform, transform_type = transform_type)

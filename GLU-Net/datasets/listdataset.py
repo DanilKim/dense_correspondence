@@ -6,7 +6,7 @@ import numpy as np
 from datasets.util import load_flo
 import torch
 from datasets.util import random_crop, resize, center_crop
-
+import torchvision.transforms as transforms
 
 def get_gt_correspondence_mask(flow):
     # convert flow to mapping
@@ -41,7 +41,7 @@ def image_flow_mask_loader(root, path_imgs, path_flo):
 
 class ListDataset(data.Dataset):
     def __init__(self, root, path_list, source_image_transform=None, target_image_transform=None, flow_transform=None,
-                 co_transform=None, loader=image_flow_mask_loader, mask=False, size=False):
+                 co_transform=None, loader=image_flow_mask_loader, mask=False, size=False, transform_type = 'raw', crop_size=512):
         """
 
         :param root: directory containing the dataset images
@@ -70,6 +70,8 @@ class ListDataset(data.Dataset):
         self.loader = loader
         self.mask = mask
         self.size = size
+        self.crop_size = crop_size
+        self.transform_type = transform_type
 
     def __getitem__(self, index):
         # for all inputs[0] must be the source and inputs[1] must be the target
@@ -106,7 +108,7 @@ class ListDataset(data.Dataset):
                 source_trans = random_crop(inputs[0], self.crop_size, fixed_np_seed)
                 source_trans = self.source_image_transform(source_trans)
             elif self.transform_type == 'center': 
-                source_trans = center_crop(inputs[0], self.crop_size)
+                source_trans, _, _ = center_crop(inputs[0], self.crop_size)
                 source_trans = self.source_image_transform(source_trans)
             else : raise "transform type ERROR in listdataset.py!"
 
@@ -117,7 +119,7 @@ class ListDataset(data.Dataset):
                 target_trans = random_crop(inputs[1],self.crop_size, fixed_np_seed)
                 target_trans = self.target_image_transform(target_trans)
             elif self.transform_type == 'center': 
-                target_trans = center_crop(inputs[1], self.crop_size)
+                target_trans, _, _ = center_crop(inputs[1], self.crop_size)
                 target_trans = self.target_image_transform(target_trans)
             else : raise "transform type ERROR in listdataset.py!"
 
@@ -128,11 +130,11 @@ class ListDataset(data.Dataset):
                 gt_flow_trans = random_crop(gt_flow,self.crop_size, fixed_np_seed)
                 gt_flow_trans = self.flow_transform(gt_flow_trans)
             elif self.transform_type == 'center': 
-                gt_flow_trans = center_crop(gt_flow, self.crop_size)
-                gt_flow_trans = self.flow_transform(gt_flow)
+                gt_flow_trans, _, _ = center_crop(gt_flow, self.crop_size)
+                gt_flow_trans = self.flow_transform(gt_flow_trans)
             else : raise "transform type ERROR in listdataset.py!"
 
-         if self.mask is not None : 
+        if self.mask is not None : 
             if self.transform_type == 'raw':
                 mask_trans = torch.from_numpy(mask).long()
             elif self.transform_type == 'random':
@@ -140,7 +142,7 @@ class ListDataset(data.Dataset):
                 mask_trans = torch.from_numpy(mask_trans).long()
             elif self.transform_type == 'center':
                 #mask_trans = torch.from_numpy(misc.imresize(mask, (self.crop_size, self.crop_size), 'bilinear')).long()
-                resize_trans = center_crop(mask, self.crop_size)
+                resize_trans, _, _ = center_crop(mask, self.crop_size)
                 mask_trans = torch.from_numpy(resize_trans).long()
             else : raise "transform type ERROR in listdataset.py!"
 
