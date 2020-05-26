@@ -1,4 +1,3 @@
-
 import os
 import numpy as np
 import argparse
@@ -122,4 +121,3 @@ if __name__ == "__main__":
             axis[2].set_title("Warped source image according to ground truth flow")
             fig.savefig(os.path.join(args.save_dir, 'synthetic_pair_{}'.format(i)), bbox_inches='tight')
             plt.close(fig)
-

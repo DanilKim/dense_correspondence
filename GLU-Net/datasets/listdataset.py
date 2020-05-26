@@ -5,7 +5,8 @@ from imageio import imread
 import numpy as np
 from datasets.util import load_flo
 import torch
-
+from datasets.util import random_crop, resize, center_crop
+import torchvision.transforms as transforms
 
 def get_gt_correspondence_mask(flow):
     # convert flow to mapping
@@ -27,7 +28,7 @@ def image_flow_loader(root, path_imgs, path_flo):
     return [imread(img).astype(np.uint8) for img in imgs], load_flo(flo)
 
 
-def image_flow_mask_loader(root, path_imgs, path_flo, path_mask):
+def image_flow_mask_loader(root, path_imgs, path_flo, path_mask=None):
     imgs = [os.path.join(root, path) for path in path_imgs]
     flo = os.path.join(root, path_flo)
     mask = os.path.join(root, path_mask)
@@ -36,7 +37,7 @@ def image_flow_mask_loader(root, path_imgs, path_flo, path_mask):
 
 class ListDataset(data.Dataset):
     def __init__(self, root, path_list, source_image_transform=None, target_image_transform=None, flow_transform=None,
-                 co_transform=None, loader=image_flow_mask_loader, mask=False, size=False):
+                 co_transform=None, loader=image_flow_mask_loader, mask=False, size=False, transform_type='raw', crop_size=520):
         """
 
         :param root: directory containing the dataset images
@@ -65,11 +66,13 @@ class ListDataset(data.Dataset):
         self.loader = loader
         self.mask = mask
         self.size = size
+        self.crop_size = crop_size
+        self.transform_type = transform_type
+        self.fixed_np_seed = 2020
 
     def __getitem__(self, index):
         # for all inputs[0] must be the source and inputs[1] must be the target
         inputs, gt_flow, occ_mask = self.path_list[index]
-        #inputs, gt_flow = self.path_list[index]
 
         if not self.mask:
             if self.size:
@@ -95,13 +98,50 @@ class ListDataset(data.Dataset):
         # after co transform that could be reshapping the target
         # transforms here will always contain conversion to tensor (then channel is before)
         if self.source_image_transform is not None:
-            source_trans = self.source_image_transform(inputs[0])
+            if self.transform_type == 'raw':
+                source_trans = self.source_image_transform(inputs[0])
+            elif self.transform_type == 'random':
+                source_trans = random_crop(inputs[0], self.crop_size, self.fixed_np_seed)
+                source_trans = self.source_image_transform(source_trans)
+            elif self.transform_type == 'center': 
+                source_trans, _, _ = center_crop(inputs[0], self.crop_size)
+                source_trans = self.source_image_transform(source_trans)
+            else : raise "transform type ERROR in listdataset.py!"
+
         if self.target_image_transform is not None:
-            target_trans = self.target_image_transform(inputs[1])
+            if self.transform_type == 'raw':
+                target_trans = self.target_image_transform(inputs[1])
+            elif self.transform_type == 'random':
+                target_trans = random_crop(inputs[1],self.crop_size, self.fixed_np_seed)
+                target_trans = self.target_image_transform(target_trans)
+            elif self.transform_type == 'center': 
+                target_trans, _, _ = center_crop(inputs[1], self.crop_size)
+                target_trans = self.target_image_transform(target_trans)
+            else : raise "transform type ERROR in listdataset.py!"
+
         if self.flow_transform is not None:
-            gt_flow_trans = self.flow_transform(gt_flow)
-        mask_trans = torch.from_numpy(mask)
-        mask_trans = mask_trans.long()
+            if self.transform_type == 'raw':
+                gt_flow_trans = self.flow_transform(gt_flow)
+            elif self.transform_type == 'random':
+                gt_flow_trans = random_crop(gt_flow,self.crop_size, self.fixed_np_seed)
+                gt_flow_trans = self.flow_transform(gt_flow_trans)
+            elif self.transform_type == 'center': 
+                gt_flow_trans, _, _ = center_crop(gt_flow, self.crop_size)
+                gt_flow_trans = self.flow_transform(gt_flow_trans)
+            else : raise "transform type ERROR in listdataset.py!"
+
+        if mask is not None :
+            if self.transform_type == 'raw':
+                mask_trans = torch.from_numpy(mask).long()
+            elif self.transform_type == 'random':
+                mask_trans = random_crop(mask, self.crop_size, self.fixed_np_seed, value=[0]) ## invaldate pixel for 0
+                mask_trans = torch.from_numpy(mask_trans).long()
+            elif self.transform_type == 'center':
+                #mask_trans = torch.from_numpy(misc.imresize(mask, (self.crop_size, self.crop_size), 'bilinear')).long()
+                resize_trans, _, _ = center_crop(mask, self.crop_size)
+                mask_trans = torch.from_numpy(resize_trans).long()
+            else : raise "transform type ERROR in listdataset.py!"
+
         return {'source_image': source_trans,
                 'target_image': target_trans,
                 'flow_map': gt_flow_trans,

@@ -217,5 +217,3 @@ for pre_trained_model_type in pre_trained_models:
             with open('{}/{}.txt'.format(args.save_dir, 'metrics_{}'.format(name_to_save)), 'w') as outfile:
                     json.dump(save_dict, outfile, ensure_ascii=False, separators=(',', ':'))
                     print('written to file ')
-
-

@@ -173,8 +173,7 @@ class SemanticGLUNet_model(nn.Module):
         ratio_x = float(w_original) / float(int_preprocessed_width)
         ratio_y = float(h_original) / float(int_preprocessed_height)
 
-        return source_img_copy.to(device), target_img_copy.to(device), source_img_256.to(device), target_img_256.to(
-            device), \
+        return source_img_copy.to(device), target_img_copy.to(device), source_img_256.to(device), target_img_256.to(device), \
                ratio_x, ratio_y, h_original, w_original
 
     def flipping_condition(self, im_source_base, im_target_base, device):

@@ -9,6 +9,7 @@ import pickle
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from datasets.util import check_gt_pair
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import torch.optim.lr_scheduler as lr_scheduler
@@ -59,6 +60,10 @@ if __name__ == "__main__":
                         help='div flow')
     parser.add_argument('--seed', type=int, default=1986,
                         help='Pseudo-RNG seed')
+    parser.add_argument('--transform_type', type=str, default='raw', help='transform type (raw - for raw data, random - random_crop, center - resize)')
+    parser.add_argument('--crop_size', type=int, default=520, help='size for crop(square)')
+    parser.add_argument('--check_gt', type=bool, default=False, help='flag for check gt pairs')
+
     args = parser.parse_args()
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -100,7 +105,6 @@ if __name__ == "__main__":
     else:
         # If synthetic pairs were already created and saved to disk, run instead of 'train_dataset' the following.
         # and replace args.training_data_dir by the root to folders containing images/ and flow/
-
         train_list_dir, eval_list_dir = train_test_split_dir(args.path, args.ratio)
         flow_transform = transforms.Compose([ArrayToTensor()]) # just put channels first and put it to float
         train_dataset, _ = PreMadeDataset_rework(root=train_list_dir,
@@ -110,7 +114,9 @@ if __name__ == "__main__":
                                           flow_transform=flow_transform,
                                           co_transform=None,
                                           mask=True,
-                                          split=1)  # only training
+                                          split=1,
+                                          transform_type = args.transform_type,
+                                          crop_size = args.crop_size)  # only training
 
         _, val_dataset = PreMadeDataset_rework(root=eval_list_dir,
         #_, val_dataset = PreMadeDataset(root=args.evaluation_data_dir,
@@ -119,7 +125,9 @@ if __name__ == "__main__":
                                         flow_transform=flow_transform,
                                         co_transform=None,
                                         mask=True,
-                                        split=0)  # only validation
+                                        split=0,
+                                        transform_type = args.transform_type,
+                                        crop_size = args.crop_size)  # only validation
 
     # Dataloader
     train_dataloader = DataLoader(train_dataset,
@@ -131,6 +139,13 @@ if __name__ == "__main__":
                                 batch_size=args.batch_size,
                                 shuffle=False,
                                 num_workers=args.n_threads)
+
+    # check if gt flow is ok
+    if(args.check_gt == True) :
+        print("Check gt pair(training set)")
+        check_gt_pair(train_dataset)
+        print("Check gt pair(validation set)")
+        check_gt_pair(val_dataset)
 
     # models
     '''

@@ -65,7 +65,6 @@ def make_dataset_rework(dir, split=None, dataset_name=None):
     return split2list(images, split, default_split=0.97)
 
 
-
 def PreMadeDataset(root, source_image_transform=None, target_image_transform=None, flow_transform=None,
                    co_transform=None, split=None, mask=False, mask_zero_borders=False):
     # that is only reading and loading the data and applying transformations to both datasets
@@ -92,13 +91,12 @@ def PreMadeDataset(root, source_image_transform=None, target_image_transform=Non
     return train_dataset, test_dataset
 
 
-def PreMadeDataset_rework(root, source_image_transform=None, target_image_transform=None, flow_transform=None,
-                   co_transform=None, split=None, mask=True, mask_zero_borders=False):
+def PreMadeDataset_rework(root,  source_image_transform=None, target_image_transform=None, flow_transform=None,
+                   co_transform=None, split=None, mask=True, mask_zero_borders=False, transform_type='raw', crop_size=512):
     # that is only reading and loading the data and applying transformations to both datasets
     train_list=[]
     test_list=[]
     for sub_root in root:
-        #sub_train_list, sub_test_list = make_dataset_rework(sub_root, split)
         sub_train_list, sub_test_list = make_dataset_rework(sub_root, split)
         train_list.extend(sub_train_list)
         test_list.extend(sub_test_list)
@@ -106,15 +104,10 @@ def PreMadeDataset_rework(root, source_image_transform=None, target_image_transf
     root = '.'
     train_dataset = ListDataset(root, train_list, source_image_transform=source_image_transform,
                                 target_image_transform=target_image_transform, mask=mask,
-                                flow_transform=flow_transform, co_transform=co_transform)
+                                flow_transform=flow_transform, co_transform=co_transform, transform_type=transform_type, crop_size=crop_size)
     test_dataset = ListDataset(root, test_list, source_image_transform=source_image_transform,
                                target_image_transform=target_image_transform, mask=mask,
-                               flow_transform=flow_transform, co_transform=co_transform)
+                               flow_transform=flow_transform, co_transform=co_transform, transform_type=transform_type, crop_size=crop_size)
 
     return train_dataset, test_dataset
     
-
-if __name__ == "__main__":
-    root = "/home/kinux98/study/lab_research/Datasets/save"
-    train_list_dir, eval_list_dir = train_test_split_dir(root, 0.7)
-    train_dataset, _ = PreMadeDataset_rework(root=train_list_dir, split=1)  # only training
