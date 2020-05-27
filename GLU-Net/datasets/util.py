@@ -5,7 +5,55 @@ import torch
 import random
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import sys
 
+
+
+def collate_fn_make_same_size(batch):
+    H_source = sys.maxsize
+    W_source = sys.maxsize
+    for sample in batch:
+        Height = sample['source_image'].shape[1]
+        Width = sample['source_image'].shape[2]
+        if(Height <= H_source): H_source = Height
+        if(Width <= W_source): W_source = Width
+    New_source=[]
+    New_target=[]
+    New_mask=[]
+    New_flow=[]
+    New_size=[]
+
+    for sample in batch:
+        source = sample['source_image'][:, :int(H_source), :int(W_source)]
+        target = sample['target_image'][:, :int(H_source), :int(W_source)]
+        mask = sample['correspondence_mask'][:int(H_source), :int(W_source)]
+        flow = sample['flow_map'][:, :int(H_source), :int(W_source)]
+
+        New_source.append(source)
+        New_target.append(target)
+        New_mask.append(mask)
+        New_flow.append(flow)
+        New_size.append(source.shape)
+
+    return {
+        'source_image': torch.stack(New_source),
+        'target_image': torch.stack(New_target),
+        'flow_map': torch.stack(New_flow),
+        'correspondence_mask': torch.stack(New_mask),
+        'source_image_size': New_size
+    }
+
+
+
+
+def get_path_from_dataloader(dataloader):
+    if not isinstance(dataloader, tuple):
+        raise "Argument must be in 'Tuple' form."
+    train_dataset = dataloader[0]
+    test_dataset = dataloader[1]
+    print(train_dataset.get_path())
+
+    return train_dataset.get_path(), test_dataset.get_path()
 
 
 def load_flo(path):

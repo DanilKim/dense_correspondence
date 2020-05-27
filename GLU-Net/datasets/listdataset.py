@@ -69,11 +69,60 @@ class ListDataset(data.Dataset):
         self.crop_size = crop_size
         self.transform_type = transform_type
         self.fixed_np_seed = 2020
+    
+    def get_path(self):
+        return self.path_list
 
     def __getitem__(self, index):
         # for all inputs[0] must be the source and inputs[1] must be the target
-        inputs, gt_flow, occ_mask = self.path_list[index]
+        inputs, gt_flow = self.path_list[index]
 
+        if not self.mask:
+            if self.size:
+                inputs, gt_flow, source_size = self.loader(self.root, inputs, gt_flow)
+            else:
+                inputs, gt_flow = self.loader(self.root, inputs, gt_flow)
+                source_size = inputs[0].shape
+            if self.co_transform is not None:
+                inputs, gt_flow = self.co_transform(inputs, gt_flow)
+
+            mask = get_gt_correspondence_mask(gt_flow)
+        else:
+            if self.size:
+                inputs, gt_flow, mask, source_size = self.loader(self.root, inputs, gt_flow)
+            else:
+                # loader comes with a mask of valid correspondences
+                inputs, gt_flow, mask = self.loader(self.root, inputs, gt_flow)
+                source_size = inputs[0].shape
+            # mask is shape hxw
+            if self.co_transform is not None:
+                inputs, gt_flow, mask = self.co_transform(inputs, gt_flow, mask)
+
+        # here gt_flow has shape HxWx2
+
+        # after co transform that could be reshapping the target
+        # transforms here will always contain conversion to tensor (then channel is before)
+        if self.source_image_transform is not None:
+            inputs[0] = self.source_image_transform(inputs[0])
+        if self.target_image_transform is not None:
+            inputs[1] = self.target_image_transform(inputs[1])
+        if self.flow_transform is not None:
+            gt_flow = self.flow_transform(gt_flow)
+
+        return {'source_image': inputs[0],
+                'target_image': inputs[1],
+                'flow_map': gt_flow,
+                'correspondence_mask': mask.astype(np.uint8),
+                'source_image_size': source_size
+                }
+
+    def __len__(self):
+        return len(self.path_list)
+
+class SintelAllpairListDataset(ListDataset):
+    def __getitem__(self, index):
+        # for all inputs[0] must be the source and inputs[1] must be the target
+        inputs, gt_flow, occ_mask = self.path_list[index]
         if not self.mask:
             if self.size:
                 inputs, gt_flow, source_size = self.loader(self.root, inputs, gt_flow)
@@ -149,5 +198,68 @@ class ListDataset(data.Dataset):
                 'source_image_size': source_size
                 }
 
-    def __len__(self):
-        return len(self.path_list)
+class KittiListDataset(ListDataset):
+    def __getitem__(self, index):
+        # for all inputs[0] must be the source and inputs[1] must be the target
+        inputs, gt_flow = self.path_list[index]
+        if not self.mask:
+            if self.size:
+                inputs, gt_flow, source_size = self.loader(self.root, inputs, gt_flow)
+            else:
+                inputs, gt_flow = self.loader(self.root, inputs, gt_flow)
+                source_size = inputs[0].shape
+            if self.co_transform is not None:
+                inputs, gt_flow = self.co_transform(inputs, gt_flow)
+
+            mask = get_gt_correspondence_mask(gt_flow)
+        else:
+            if self.size:
+                inputs, gt_flow, mask, source_size = self.loader(self.root, inputs, gt_flow)
+            else:
+                # loader comes with a mask of valid correspondences
+                inputs, gt_flow, mask = self.loader(self.root, inputs, gt_flow)
+                source_size = inputs[0].shape
+            # mask is shape hxw
+            if self.co_transform is not None:
+                inputs, gt_flow, mask = self.co_transform(inputs, gt_flow, mask)
+
+        # here gt_flow has shape HxWx2
+
+        # after co transform that could be reshapping the target
+        # transforms here will always contain conversion to tensor (then channel is before)
+        if self.source_image_transform is not None:
+            inputs[0] = self.source_image_transform(inputs[0])
+        if self.target_image_transform is not None:
+            inputs[1] = self.target_image_transform(inputs[1])
+        if self.flow_transform is not None:
+            gt_flow = self.flow_transform(gt_flow)
+        mask = mask.astype(np.uint8)
+
+        W_source = inputs[0].shape[2]
+        H_source = inputs[0].shape[1]
+
+        source = inputs[0][:, :int(H_source/16)*16, :int(W_source/16)*16]
+
+        W_target = inputs[1].shape[2]
+        H_target = inputs[1].shape[1]
+        
+        target = inputs[1][:, :int(H_target/16)*16, :int(W_target/16)*16]
+
+        W_flow = gt_flow.shape[2]
+        H_flow = gt_flow.shape[1]
+
+        flow = gt_flow[:, :int(H_flow/16)*16, :int(W_flow/16)*16]
+
+        W_mask = mask.shape[1]
+        H_mask = mask.shape[0]
+
+        mask_trans = mask[ :int(H_mask/16)*16, :int(W_mask/16)*16]
+        mask_trans = torch.from_numpy(mask_trans).long()
+
+        return {'source_image': source ,
+                'target_image': target,
+                'flow_map': flow ,
+                'correspondence_mask': mask_trans,
+                'source_image_size': source.shape
+                }
+    

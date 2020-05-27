@@ -5,6 +5,7 @@ from datasets.listdataset import ListDataset
 from datasets.util import split2list
 import numpy as np
 from utils import co_flow_and_images_transforms
+from datasets.listdataset import KittiListDataset 
 
 try:
     import cv2
@@ -81,32 +82,32 @@ def KITTI_flow_loader(root,path_imgs, path_flo):
 def KITTI_occ(root, source_image_transform=None, target_image_transform=None, flow_transform=None,
               co_transform=None, split=None):
     train_list, test_list = make_dataset(root, split, True)
-    train_dataset = ListDataset(root, train_list, source_image_transform=source_image_transform,
+    train_dataset = KittiListDataset(root, train_list, source_image_transform=source_image_transform,
                                 target_image_transform=target_image_transform,
                                 flow_transform=flow_transform, co_transform=co_transform,
                                 loader=KITTI_flow_loader, mask=True)
-    test_dataset = ListDataset(root, test_list, source_image_transform=source_image_transform,
+    test_dataset = KittiListDataset(root, test_list, source_image_transform=source_image_transform,
                                target_image_transform=target_image_transform,
                                flow_transform=flow_transform,
                                co_transform=co_transform,
                                loader=KITTI_flow_loader, mask=True)
-    return train_dataset, test_dataset
+    return (train_dataset, test_dataset)
 
 
 def KITTI_noc(root, source_image_transform=None, target_image_transform=None, flow_transform=None,
               co_transform=None, split=None):
     train_list, test_list = make_dataset(root, split, False)
-    train_dataset = ListDataset(root, train_list, source_image_transform=source_image_transform,
+    train_dataset = KittiListDataset(root, train_list, source_image_transform=source_image_transform,
                                 target_image_transform=target_image_transform,
                                 flow_transform=flow_transform, co_transform=co_transform, loader=KITTI_flow_loader,
                                 mask=True)
-    test_dataset = ListDataset(root, test_list, source_image_transform=source_image_transform,
+    test_dataset = KittiListDataset(root, test_list, source_image_transform=source_image_transform,
                                target_image_transform=target_image_transform,
                                flow_transform=flow_transform,
                                co_transform=co_transform,
                                loader=KITTI_flow_loader, mask=True)
 
-    return train_dataset, test_dataset
+    return (train_dataset, test_dataset)
 
 
 def kitti_occ_both(root, source_image_transform=None, target_image_transform=None, flow_transform=None,
@@ -117,20 +118,20 @@ def kitti_occ_both(root, source_image_transform=None, target_image_transform=Non
     train_list2, test_list2 = make_dataset(os.path.join(root,'KITTI_2015/training/'), dataset_name='KITTI_2015/training/',
                                    split=split, occ=True)
 
-    train_dataset = ListDataset(root, train_list1 + train_list2, source_image_transform=source_image_transform,
+    train_dataset = KittiListDataset (root, train_list1 + train_list2, source_image_transform=source_image_transform,
                                 target_image_transform=target_image_transform,
                                 flow_transform=flow_transform,
                                 co_transform=co_transform, loader=KITTI_flow_loader, mask=True)
     if test_image_transform is None:
-        test_dataset = ListDataset(root, test_list1 + test_list2, source_image_transform=source_image_transform,
+        test_dataset = KittiListDataset (root, test_list1 + test_list2, source_image_transform=source_image_transform,
                                    target_image_transform=target_image_transform,
                                    flow_transform=flow_transform,
                                    co_transform=co_flow_and_images_transforms.CenterCrop((368, 1224)),
                                    loader=KITTI_flow_loader, mask=True)
     else:
-        test_dataset = ListDataset(root, test_list1 + test_list2, source_image_transform=test_image_transform,
+        test_dataset = KittiListDataset (root, test_list1 + test_list2, source_image_transform=test_image_transform,
                                    target_image_transform=test_image_transform,
                                    flow_transform=flow_transform,
                                    co_transform=co_flow_and_images_transforms.CenterCrop((368, 1224)),
                                    loader=KITTI_flow_loader, mask=True)
-    return train_dataset, test_dataset
+    return (train_dataset, test_dataset)

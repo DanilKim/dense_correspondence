@@ -14,13 +14,13 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import torch.optim.lr_scheduler as lr_scheduler
 from datasets.training_dataset import HomoAffTps_Dataset
-from datasets.load_pre_made_dataset import PreMadeDataset, PreMadeDataset_rework
-from datasets.dataset_split import train_test_split_dir
+from datasets.load_pre_made_dataset import PreMadeDataset, CombinedDataset
 from utils_training.optimize_GLUNet_with_adaptive_resolution import train_epoch, validate_epoch
 from models.our_models.GLUNet import GLUNet_model
 from utils_training.utils_CNN import load_checkpoint, save_checkpoint, boolean_string
 from tensorboardX import SummaryWriter
 from utils.image_transforms import ArrayToTensor
+from datasets.mpisintel import mpi_sintel_allpair
 
 if __name__ == "__main__":
     # Argument parsing
@@ -63,6 +63,7 @@ if __name__ == "__main__":
     parser.add_argument('--transform_type', type=str, default='raw', help='transform type (raw - for raw data, random - random_crop, center - resize)')
     parser.add_argument('--crop_size', type=int, default=520, help='size for crop(square)')
     parser.add_argument('--check_gt', type=bool, default=False, help='flag for check gt pairs')
+    parser.add_argument('--dataset_list', type=str, default="sintel", help='specific datasets for training. It will search \'training_data_dir\' if there is a dataset with name')
 
     args = parser.parse_args()
     random.seed(args.seed)
@@ -105,40 +106,51 @@ if __name__ == "__main__":
     else:
         # If synthetic pairs were already created and saved to disk, run instead of 'train_dataset' the following.
         # and replace args.training_data_dir by the root to folders containing images/ and flow/
-        train_list_dir, eval_list_dir = train_test_split_dir(args.path, args.ratio)
         flow_transform = transforms.Compose([ArrayToTensor()]) # just put channels first and put it to float
-        train_dataset, _ = PreMadeDataset_rework(root=train_list_dir,
-        #train_dataset, _ = PreMadeDataset(root=args.training_data_dir,
-                                          source_image_transform=source_img_transforms,
-                                          target_image_transform=target_img_transforms,
-                                          flow_transform=flow_transform,
-                                          co_transform=None,
-                                          mask=True,
-                                          split=1,
-                                          transform_type = args.transform_type,
-                                          crop_size = args.crop_size)  # only training
+        
+        #train_dataset, _ = PreMadeDataset_rework(root=train_list_dir,
+        # train_dataset, _ = PreMadeDataset(root=args.training_data_dir,
+        #                                   source_image_transform=source_img_transforms,
+        #                                   target_image_transform=target_img_transforms,
+        #                                   flow_transform=flow_transform,
+        #                                   co_transform=None,
+        #                                   mask=True,
+        #                                   split=1,
+        #                                   transform_type = args.transform_type,
+        #                                   crop_size = args.crop_size)  # only training
 
-        _, val_dataset = PreMadeDataset_rework(root=eval_list_dir,
-        #_, val_dataset = PreMadeDataset(root=args.evaluation_data_dir,
-                                        source_image_transform=source_img_transforms,
-                                        target_image_transform=target_img_transforms,
-                                        flow_transform=flow_transform,
-                                        co_transform=None,
-                                        mask=True,
-                                        split=0,
-                                        transform_type = args.transform_type,
-                                        crop_size = args.crop_size)  # only validation
+        # #_, val_dataset = PreMadeDataset_rework(root=eval_list_dir,
+        # _, val_dataset = PreMadeDataset(root=args.evaluation_data_dir,
+        #                                 source_image_transform=source_img_transforms,
+        #                                 target_image_transform=target_img_transforms,
+        #                                 flow_transform=flow_transform,
+        #                                 co_transform=None,
+        #                                 mask=True,
+        #                                 split=0,
+        #                                 transform_type = args.transform_type,
+        #                                 crop_size = args.crop_size)  # only validation
+        my_dataset = [dataset for dataset in args.dataset_list.split(',')]
+        print(my_dataset)
+
+        candidate_list = CombinedDataset(dataset_path = args.training_data_dir,
+                                         batch_size=args.batch_size,
+                                         num_workers=args.n_threads, 
+                                         dataset_list = my_dataset,
+                                         is_specific=False, dataset_name = 'kitti_2012') 
+
+        print(len(candidate_list))
+
 
     # Dataloader
-    train_dataloader = DataLoader(train_dataset,
-                                  batch_size=args.batch_size,
-                                  shuffle=True,
-                                  num_workers=args.n_threads)
+    # train_dataloader = DataLoader(train_dataset,
+    #                               batch_size=args.batch_size,
+    #                               shuffle=True,
+    #                               num_workers=args.n_threads)
 
-    val_dataloader = DataLoader(val_dataset,
-                                batch_size=args.batch_size,
-                                shuffle=False,
-                                num_workers=args.n_threads)
+    # val_dataloader = DataLoader(val_dataset,
+    #                             batch_size=args.batch_size,
+    #                             shuffle=False,
+    #                             num_workers=args.n_threads)
 
     # check if gt flow is ok
     if(args.check_gt == True) :
@@ -227,26 +239,30 @@ if __name__ == "__main__":
                 scheduler.last_epoch, scheduler.get_lr()[0]))
 
         # Training one epoch
-        train_loss = train_epoch(model,
-                                 optimizer,
-                                 train_dataloader,
-                                 device,
-                                 epoch,
-                                 train_writer,
-                                 div_flow=args.div_flow,
-                                 save_path=os.path.join(save_path, 'train'),
-                                 loss_grid_weights=weights_loss_coeffs)
-        train_writer.add_scalar('train loss', train_loss, epoch)
-        train_writer.add_scalar('learning_rate', scheduler.get_lr()[0], epoch)
-        print(colored('==> ', 'green') + 'Train average loss:', train_loss)
-        torch.cuda.empty_cache()
+        for tuple_data in candidate_list:
+            train_dataloader = tuple_data[0]
+            val_dataloader = tuple_data[1]
+            train_loss = train_epoch(model,
+                                     optimizer,
+                                     train_dataloader,
+                                     device,
+                                     epoch,
+                                     train_writer,
+                                     div_flow=args.div_flow,
+                                     save_path=os.path.join(save_path, 'train'),
+                                     loss_grid_weights=weights_loss_coeffs)
+            train_writer.add_scalar('train loss', train_loss, epoch)
+            train_writer.add_scalar('learning_rate', scheduler.get_lr()[0], epoch)
+            print(colored('==> ', 'green') + 'Train average loss:', train_loss)
+            torch.cuda.empty_cache()
 
-        # Validation
-        val_loss_grid, val_mean_epe, val_mean_epe_H_8, val_mean_epe_32, val_mean_epe_16 = \
-            validate_epoch(model, val_dataloader, device, epoch=epoch,
-                           save_path=os.path.join(save_path, 'test'),
-                           div_flow=args.div_flow,
-                           loss_grid_weights=weights_loss_coeffs)
+            # Validation
+            val_loss_grid, val_mean_epe, val_mean_epe_H_8, val_mean_epe_32, val_mean_epe_16 = \
+                validate_epoch(model, val_dataloader, device, epoch=epoch,
+                               save_path=os.path.join(save_path, 'test'),
+                               div_flow=args.div_flow,
+                               loss_grid_weights=weights_loss_coeffs)
+
         print(colored('==> ', 'blue') + 'bigger images: Val average grid loss :',
               val_loss_grid)
         print('mean EPE is {}'.format(val_mean_epe))
