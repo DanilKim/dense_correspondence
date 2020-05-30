@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 import torchvision.models as models
 import copy
-from tqdm import tqdm
 def gram_matrix(input):
     a, b, c, d = input.size()  # a=batch size(=1)
     # b=number of feature maps
@@ -49,7 +48,7 @@ class StyleLoss(nn.Module):
         print("Extracting Features...")
         len_data = len(style_imgs)
         with torch.no_grad():
-            for cnt, img in tqdm(enumerate(style_imgs)):
+            for cnt, img in enumerate(style_imgs):
                 img = img.to(self.device, torch.float)
                 feature = model(img).detach()
                 if cnt == 0:
@@ -148,7 +147,7 @@ def get_input_optimizer(input_img):
     return optimizer
 
 def run_style_transfer(cnn, normalization_mean, normalization_std,
-                       content_img, style_img, input_img, num_steps=1,
+                       content_img, style_img, input_img, num_steps=400,
                        style_weight=1000000, content_weight=1, device=None):
     """Run the style transfer."""
     print('Building the style transfer model..')
@@ -157,7 +156,7 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
     optimizer = get_input_optimizer(input_img)
     print('Optimizing..')
     run = [0] 
-    for cnt in tqdm(range(0, num_steps+1)):
+    for cnt in range(0, num_steps+1):
         if(cnt > num_steps) : break
         def closure():
             # correct the values of updated input image
