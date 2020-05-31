@@ -36,7 +36,6 @@ if __name__ == "__main__":
                         help='path to directory containing original images for validation if --pre_loaded_training_'
                              'dataset is False or containing the synthetic pairs of validation images and their '
                              'corresponding flow fields if --pre_loaded_training_dataset is True')
-    parser.add_argument('--path', type=str, default='./save', help='dataset path for train/test')
     parser.add_argument('--ratio', type=float, default=0.75, help='split ratio of train/test dataset')
 
     parser.add_argument('--snapshots', type=str, default='./snapshots')
@@ -212,6 +211,7 @@ if __name__ == "__main__":
                     state[k] = v.to(device)
         cur_snapshot = os.path.basename(os.path.dirname(args.pretrained))
     else:
+        print("[debug] making saving folder : ", args.snapshots)
         if not os.path.isdir(args.snapshots):
             os.mkdir(args.snapshots)
 
@@ -239,7 +239,8 @@ if __name__ == "__main__":
                 scheduler.last_epoch, scheduler.get_lr()[0]))
 
         # Training one epoch
-        for tuple_data in candidate_list:
+        for i, tuple_data in enumerate(candidate_list):
+            print(colored('==> ', 'green') + 'start training(', i+1,'/',len(candidate_list),')')
             train_dataloader = tuple_data[0]
             val_dataloader = tuple_data[1]
             train_loss = train_epoch(model,
@@ -254,7 +255,6 @@ if __name__ == "__main__":
             train_writer.add_scalar('train loss', train_loss, epoch)
             train_writer.add_scalar('learning_rate', scheduler.get_lr()[0], epoch)
             print(colored('==> ', 'green') + 'Train average loss:', train_loss)
-            torch.cuda.empty_cache()
 
             # Validation
             val_loss_grid, val_mean_epe, val_mean_epe_H_8, val_mean_epe_32, val_mean_epe_16 = \
@@ -262,31 +262,32 @@ if __name__ == "__main__":
                                save_path=os.path.join(save_path, 'test'),
                                div_flow=args.div_flow,
                                loss_grid_weights=weights_loss_coeffs)
+            if(i == len(candidate_list)-1):
+                print(colored('==> ', 'blue') + 'bigger images: Val average grid loss :',
+                      val_loss_grid)
+                print('mean EPE is {}'.format(val_mean_epe))
+                print('mean EPE from reso H/8 is {}'.format(val_mean_epe_H_8))
+                print('mean EPE from reso 32 is {}'.format(val_mean_epe_32))
+                print('mean EPE from reso 16 is {}'.format(val_mean_epe_16))
+                test_writer.add_scalar('validation images: mean EPE ', val_mean_epe, epoch)
+                test_writer.add_scalar('validation images: mean EPE_from_reso_H_8', val_mean_epe_H_8, epoch)
+                test_writer.add_scalar('validation images: mean EPE_from_reso_32', val_mean_epe_32, epoch)
+                test_writer.add_scalar('validation images: mean EPE_from_reso_16', val_mean_epe_16, epoch)
+                test_writer.add_scalar('validation images: val loss', val_loss_grid, epoch)
+                print(colored('==> ', 'blue') + 'finished epoch :', epoch + 1)
+                torch.cuda.empty_cache()
+                # save checkpoint for each epoch and a fine called best_model so far
+                if best_val < 0:
+                    best_val = val_mean_epe
 
-        print(colored('==> ', 'blue') + 'bigger images: Val average grid loss :',
-              val_loss_grid)
-        print('mean EPE is {}'.format(val_mean_epe))
-        print('mean EPE from reso H/8 is {}'.format(val_mean_epe_H_8))
-        print('mean EPE from reso 32 is {}'.format(val_mean_epe_32))
-        print('mean EPE from reso 16 is {}'.format(val_mean_epe_16))
-        test_writer.add_scalar('validation images: mean EPE ', val_mean_epe, epoch)
-        test_writer.add_scalar('validation images: mean EPE_from_reso_H_8', val_mean_epe_H_8, epoch)
-        test_writer.add_scalar('validation images: mean EPE_from_reso_32', val_mean_epe_32, epoch)
-        test_writer.add_scalar('validation images: mean EPE_from_reso_16', val_mean_epe_16, epoch)
-        test_writer.add_scalar('validation images: val loss', val_loss_grid, epoch)
-        print(colored('==> ', 'blue') + 'finished epoch :', epoch + 1)
-        torch.cuda.empty_cache()
-        # save checkpoint for each epoch and a fine called best_model so far
-        if best_val < 0:
-            best_val = val_mean_epe
-
-        is_best = val_mean_epe < best_val
-        best_val = min(val_mean_epe, best_val)
-        save_checkpoint({'epoch': epoch + 1,
-                         'state_dict': model.module.state_dict(),
-                         'optimizer': optimizer.state_dict(),
-                         'scheduler': scheduler.state_dict(),
-                         'best_loss': best_val},
-                        is_best, save_path, 'epoch_{}.pth'.format(epoch + 1))
+                is_best = val_mean_epe < best_val
+                best_val = min(val_mean_epe, best_val)
+                print(colored('==> ', 'red') + 'saving current status... :', epoch + 1)
+                save_checkpoint({'epoch': epoch + 1,
+                                 'state_dict': model.module.state_dict(),
+                                 'optimizer': optimizer.state_dict(),
+                                 'scheduler': scheduler.state_dict(),
+                                 'best_loss': best_val},
+                                is_best, save_path, 'epoch_{}.pth'.format(epoch + 1))
 
     print(args.seed, 'Training took:', time.time()-train_started, 'seconds')

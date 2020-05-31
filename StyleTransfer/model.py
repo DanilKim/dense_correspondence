@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 import torchvision.models as models
 import copy
+from tqdm import tqdm
 def gram_matrix(input):
     a, b, c, d = input.size()  # a=batch size(=1)
     # b=number of feature maps
@@ -45,7 +46,7 @@ class StyleLoss(nn.Module):
         self.target = self.after_init(style_imgs, model)
 
     def after_init(self, style_imgs, model):
-        print("Extracting Features...")
+        
         len_data = len(style_imgs)
         with torch.no_grad():
             for cnt, img in enumerate(style_imgs):
@@ -101,7 +102,7 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     
     i = 0  # increment every time we see a conv
     
-    for layer in cnn.children():
+    for layer in tqdm(cnn.children()):
         if isinstance(layer, nn.Conv2d):
             i += 1
             name = 'conv_{}'.format(i)
@@ -147,7 +148,7 @@ def get_input_optimizer(input_img):
     return optimizer
 
 def run_style_transfer(cnn, normalization_mean, normalization_std,
-                       content_img, style_img, input_img, num_steps=400,
+                       content_img, style_img, input_img, num_steps=50,
                        style_weight=1000000, content_weight=1, device=None):
     """Run the style transfer."""
     print('Building the style transfer model..')
@@ -157,7 +158,6 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
     print('Optimizing..')
     run = [0] 
     for cnt in range(0, num_steps+1):
-        if(cnt > num_steps) : break
         def closure():
             # correct the values of updated input image
             input_img.data.clamp_(0, 1)
@@ -180,6 +180,7 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
 
             run[0] += 1
             if run[0] % 50 == 0:
+                print("step {}".format(cnt+1))
                 print("run {}:".format(run))
                 print('Style Loss : {:4f} Content Loss: {:4f}'.format(
                     style_score.item(), content_score.item()))

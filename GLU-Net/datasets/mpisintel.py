@@ -1,12 +1,15 @@
 import os.path
 import glob
-from .listdataset import ListDataset
+from .listdataset import ListDataset, SintelAllpairListDataset
 from datasets.util import split2list
 from utils import co_flow_and_images_transforms
 from imageio import imread
 from .listdataset import load_flo
 import numpy as np
 import cv2
+from datasets.dataset_split import train_test_split_dir
+
+
 
 '''
 extracted from https://github.com/ClementPinard/FlowNetPytorch/tree/master/datasets
@@ -40,7 +43,6 @@ def make_dataset(dataset_dir, split, dataset_type='clean'):
         images.append([[img1,img2],flow_map])
 
     return split2list(images, split, default_split=0.87)
-
 
 def mpisintel_loader(root, path_imgs, path_flo):
     imgs = [os.path.join(root,path) for path in path_imgs]
@@ -121,3 +123,49 @@ def mpi_sintel_both(root, source_image_transform=None, target_image_transform=No
                                    loader=mpisintel_loader, mask=True)
 
     return train_dataset, test_dataset
+
+
+def mpi_sintel_allpair(root, dataset="sintel_allpair", source_image_transform=None, target_image_transform=None,  
+                    flow_transform=None, co_transform=None, split=0.7, mask=True, transform_type='raw', crop_size=512) : 
+    ''' load images from generated sintel all pair dataset.'''
+    if not os.path.isdir(root): 
+        raise "(mip sintel_allpair : Invalid path for " + os.path.join(root, dataset)
+    train_list_dir, eval_list_dir = train_test_split_dir(os.path.join(root, dataset), split)
+
+    train_list=[]
+    for sub_root in train_list_dir:
+        images = []
+        # Make sure that the folders exist
+        if not os.path.isdir(os.path.join(root, sub_root)):
+            raise ValueError("the training directory path that you indicated does not exist !")
+        flow_map = os.path.join(sub_root, 'flow.flo')
+        source_img = os.path.join(sub_root, 'target.png') # source image
+        target_img = os.path.join(sub_root, 'source.png') # target image
+        occ_mask = os.path.join(sub_root, 'occlusion.png') # occ_mask
+        images.append([[source_img, target_img], flow_map, occ_mask])
+        sub_train_list, _ = split2list(images, split, default_split=split)
+        train_list.extend(sub_train_list)
+
+    test_list=[]
+    for sub_root in eval_list_dir:
+        images = []
+        # Make sure that the folders exist
+        if not os.path.isdir(os.path.join(root, sub_root)):
+            raise ValueError("the training directory path that you indicated does not exist !")
+        flow_map = os.path.join(sub_root, 'flow.flo')
+        source_img = os.path.join(sub_root, 'target.png') # source image
+        target_img = os.path.join(sub_root, 'source.png') # target image
+        occ_mask = os.path.join(sub_root, 'occlusion.png') # occ_mask
+        images.append([[source_img, target_img], flow_map, occ_mask])
+        _, sub_test_list = split2list(images, split, default_split=split)
+        test_list.extend(sub_test_list)
+
+    root = '.'
+    train_dataset = SintelAllpairListDataset(root, train_list, source_image_transform=source_image_transform,
+                                target_image_transform=target_image_transform, mask=mask,
+                                flow_transform=flow_transform, co_transform=co_transform, transform_type=transform_type, crop_size=crop_size)
+    test_dataset = SintelAllpairListDataset(root, test_list, source_image_transform=source_image_transform,
+                               target_image_transform=target_image_transform, mask=mask,
+                               flow_transform=flow_transform, co_transform=co_transform, transform_type=transform_type, crop_size=crop_size)
+
+    return (train_dataset, test_dataset)

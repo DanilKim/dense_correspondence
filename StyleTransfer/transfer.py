@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     print("Style transfering...")
     cnt = 0
-    for name, dataset in tqdm(content_datasets.items()):
+    for name, dataset in content_datasets.items():
         for cnt, one_img in enumerate(dataset):
             print("[",name,"] : ")
             Folder_path, File_name = os.path.split(dataset.get_path(cnt))
