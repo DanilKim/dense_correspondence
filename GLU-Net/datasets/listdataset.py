@@ -28,16 +28,9 @@ def image_flow_loader(root, path_imgs, path_flo):
     return [imread(img).astype(np.uint8) for img in imgs], load_flo(flo)
 
 
-def image_flow_mask_loader(root, path_imgs, path_flo, path_mask=None):
-    imgs = [os.path.join(root, path) for path in path_imgs]
-    flo = os.path.join(root, path_flo)
-    mask = os.path.join(root, path_mask)
-    return [imread(img).astype(np.uint8) for img in imgs], load_flo(flo), 1 - imread(mask).astype(np.float32)/255
-
-
 class ListDataset(data.Dataset):
     def __init__(self, root, path_list, source_image_transform=None, target_image_transform=None, flow_transform=None,
-                 co_transform=None, loader=image_flow_mask_loader, mask=False, size=False, transform_type='raw', crop_size=520):
+                 co_transform=None, loader=image_flow_loader, mask=False, size=False):
         """
 
         :param root: directory containing the dataset images
@@ -66,9 +59,6 @@ class ListDataset(data.Dataset):
         self.loader = loader
         self.mask = mask
         self.size = size
-        self.crop_size = crop_size
-        self.transform_type = transform_type
-        self.fixed_np_seed = 2020
     
     def get_path(self):
         return self.path_list
@@ -109,15 +99,39 @@ class ListDataset(data.Dataset):
         if self.flow_transform is not None:
             gt_flow = self.flow_transform(gt_flow)
 
-        return {'source_image': inputs[0],
-                'target_image': inputs[1],
-                'flow_map': gt_flow,
-                'correspondence_mask': mask.astype(np.uint8),
+        mask = mask.astype(np.uint8)
+
+        W_source = inputs[0].shape[2]
+        H_source = inputs[0].shape[1]
+
+        source = inputs[0][:, :int(H_source / 16) * 16, :int(W_source / 16) * 16]
+
+        W_target = inputs[1].shape[2]
+        H_target = inputs[1].shape[1]
+
+        target = inputs[1][:, :int(H_target / 16) * 16, :int(W_target / 16) * 16]
+
+        W_flow = gt_flow.shape[2]
+        H_flow = gt_flow.shape[1]
+
+        flow = gt_flow[:, :int(H_flow / 16) * 16, :int(W_flow / 16) * 16]
+
+        W_mask = mask.shape[1]
+        H_mask = mask.shape[0]
+
+        mask_trans = mask[:int(H_mask / 16) * 16, :int(W_mask / 16) * 16]
+        mask_trans = torch.from_numpy(mask_trans).long()
+
+        return {'source_image': source,
+                'target_image': target,
+                'flow_map': flow,
+                'correspondence_mask': mask_trans,
                 'source_image_size': source_size
                 }
 
     def __len__(self):
         return len(self.path_list)
+
 
 class SintelAllpairListDataset(ListDataset):
     def __getitem__(self, index):

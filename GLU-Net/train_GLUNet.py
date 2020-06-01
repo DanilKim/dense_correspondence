@@ -9,20 +9,24 @@ import pickle
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from datasets.util import check_gt_pair
+import utils.image_transforms as img_transform
+from datasets.util import check_gt_pair, collate_fn_make_same_size
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import torch.optim.lr_scheduler as lr_scheduler
-from datasets.training_dataset import HomoAffTps_Dataset
-from datasets.load_pre_made_dataset import PreMadeDataset, CombinedDataset
 from utils_training.optimize_GLUNet_with_adaptive_resolution import train_epoch, validate_epoch
 from models.our_models.GLUNet import GLUNet_model
 from utils_training.utils_CNN import load_checkpoint, save_checkpoint, boolean_string
 from tensorboardX import SummaryWriter
-from utils.image_transforms import ArrayToTensor
-from datasets.mpisintel import mpi_sintel_allpair
+import datasets
 
-if __name__ == "__main__":
+dataset_names = ['sintel_clean', 'sintel_final', 'sintel_both',
+                 'sintel_allpair_clean', 'sintel_allpair_final', 'sintel_allpair_random-style', 'sintel_allpair_real-style-n2d',
+                 'kitti_occ_2012', 'kitti_occ_2015', 'kitti_noc_2012', 'kitti_noc_2015',
+                 'DPED-CityScape-ADE']
+
+
+def parse_arguments():
     # Argument parsing
     parser = argparse.ArgumentParser(description='GLU-Net train script')
     # Paths
@@ -37,10 +41,9 @@ if __name__ == "__main__":
                              'dataset is False or containing the synthetic pairs of validation images and their '
                              'corresponding flow fields if --pre_loaded_training_dataset is True')
     parser.add_argument('--ratio', type=float, default=0.75, help='split ratio of train/test dataset')
-
     parser.add_argument('--snapshots', type=str, default='./snapshots')
     parser.add_argument('--pretrained', dest='pretrained', default=None,
-                       help='path to pre-trained model')
+                        help='path to pre-trained model')
     # Optimization parameters
     parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
     parser.add_argument('--momentum', type=float,
@@ -59,12 +62,43 @@ if __name__ == "__main__":
                         help='div flow')
     parser.add_argument('--seed', type=int, default=1986,
                         help='Pseudo-RNG seed')
-    parser.add_argument('--transform_type', type=str, default='raw', help='transform type (raw - for raw data, random - random_crop, center - resize)')
-    parser.add_argument('--crop_size', type=int, default=520, help='size for crop(square)')
+    parser.add_argument('--transform_type', type=str, default='Raw', choices=['Raw', 'CenterCrop', 'RandomCrop'],
+                        help='transform type')
+    parser.add_argument('--input_size', type=int, default=520, help='size for input(square)')
     parser.add_argument('--check_gt', type=bool, default=False, help='flag for check gt pairs')
-    parser.add_argument('--dataset_list', type=str, default="sintel", help='specific datasets for training. It will search \'training_data_dir\' if there is a dataset with name')
+    parser.add_argument('--dataset_list', type=str, default="sintel_allpair_clean", nargs='+',
+                        choices=dataset_names,
+                        help='specific datasets for training. It will search \'training_data_dir\' if there is a dataset with name'
+                             +'VALID Names : ' +' | '.join(dataset_names))
 
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def parse_dataset_info(dataset_argmument):
+    import os
+    roots = []
+    train_sets = []
+    for dataset in dataset_argmument:
+        info = dataset.split('_')
+        if info[0] == 'sintel':
+            if info[1] == 'allpair':
+                roots.append(os.path.join('sintel', 'extracted_pairs', info[2], 'all'))
+                train_sets.append(datasets.mpi_sintel_allpair)
+            else:
+                roots.append(os.path.join('sintel', info[1]))
+                train_sets.append(datasets.__dict__['mpi_sintel_' + info[2]])
+        elif info[0] == 'kitti':
+            roots.append('KITTI_' + info[2] + '/training/')
+            train_sets.append(datasets.__dict__['_'.join(info[:2])])
+        elif info[0] == 'DPED-CityScape-ADE':
+            roots.append('DPED-CityScape-ADE20k')
+            train_sets.append(datasets.DPEDCityScapeADE)
+
+    return roots, train_sets
+
+
+if __name__ == "__main__":
+    args = parse_arguments()
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.cuda.empty_cache()
@@ -72,91 +106,48 @@ if __name__ == "__main__":
     torch.cuda.manual_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = False
-    
+    #   Decode training set information from input string #
+    roots, train_sets = parse_dataset_info(args.dataset_list)
+
     print(device)
 
     # datasets, pre-processing of the images is done within the network function !
-    source_img_transforms = transforms.Compose([ArrayToTensor(get_float=False)])
-    target_img_transforms = transforms.Compose([ArrayToTensor(get_float=False)])
+    source_img_transforms = transforms.Compose([img_transform.__dict__[args.transform_type](args.input_size),
+                                                img_transform.ArrayToTensor(get_float=False)])
+    target_img_transforms = transforms.Compose([img_transform.__dict__[args.transform_type](args.input_size),
+                                                img_transform.ArrayToTensor(get_float=False)])
+    flow_transforms       = transforms.Compose([img_transform.__dict__[args.transform_type](args.input_size),
+                                                img_transform.ArrayToTensor(get_float=False)])
 
-    if not args.pre_loaded_training_dataset:
-        # training dataset, created on the fly at each epoch
-        pyramid_param = [520] # means that we get the ground-truth flow field at this size
-        train_dataset = HomoAffTps_Dataset(image_path=args.training_data_dir,
-                                           csv_file=osp.join('datasets', 'csv_files',
-                                                         'homo_aff_tps_train_DPED_CityScape_ADE.csv'),
-                                           transforms=source_img_transforms,
-                                           transforms_target=target_img_transforms,
-                                           pyramid_param=pyramid_param,
-                                           get_flow=True,
-                                           output_size=(520, 520))
+    candidate_list = []
+    for root, dataset_class in zip(roots, train_sets):
+        train_list, val_list = dataset_class(root=os.path.join(args.training_data_dir, root),
+                                             source_image_transform=source_img_transforms,
+                                             target_image_transform=target_img_transforms,
+                                             flow_transform=flow_transforms)
 
-        # validation dataset
-        pyramid_param = [520]
-        val_dataset = HomoAffTps_Dataset(image_path=args.evaluation_data_dir,
-                                         csv_file=osp.join('datasets', 'csv_files',
-                                                           'homo_aff_tps_test_DPED_CityScape_ADE.csv'),
-                                         transforms=source_img_transforms,
-                                         transforms_target=target_img_transforms,
-                                         pyramid_param=pyramid_param,
-                                         get_flow=True,
-                                         output_size=(520, 520))
+        train_dataloader = DataLoader(train_list,
+                                      batch_size=args.batch_size,
+                                      shuffle=True,
+                                      num_workers=args.n_threads,
+                                      collate_fn=collate_fn_make_same_size)
 
-    else:
-        # If synthetic pairs were already created and saved to disk, run instead of 'train_dataset' the following.
-        # and replace args.training_data_dir by the root to folders containing images/ and flow/
-        flow_transform = transforms.Compose([ArrayToTensor()]) # just put channels first and put it to float
-        
-        #train_dataset, _ = PreMadeDataset_rework(root=train_list_dir,
-        # train_dataset, _ = PreMadeDataset(root=args.training_data_dir,
-        #                                   source_image_transform=source_img_transforms,
-        #                                   target_image_transform=target_img_transforms,
-        #                                   flow_transform=flow_transform,
-        #                                   co_transform=None,
-        #                                   mask=True,
-        #                                   split=1,
-        #                                   transform_type = args.transform_type,
-        #                                   crop_size = args.crop_size)  # only training
+        val_dataloader   = DataLoader(val_list,
+                                      batch_size=args.batch_size,
+                                      shuffle=False,
+                                      num_workers=args.n_threads,
+                                      collate_fn=collate_fn_make_same_size)
 
-        # #_, val_dataset = PreMadeDataset_rework(root=eval_list_dir,
-        # _, val_dataset = PreMadeDataset(root=args.evaluation_data_dir,
-        #                                 source_image_transform=source_img_transforms,
-        #                                 target_image_transform=target_img_transforms,
-        #                                 flow_transform=flow_transform,
-        #                                 co_transform=None,
-        #                                 mask=True,
-        #                                 split=0,
-        #                                 transform_type = args.transform_type,
-        #                                 crop_size = args.crop_size)  # only validation
-        my_dataset = [dataset for dataset in args.dataset_list.split(',')]
-        print(my_dataset)
+        candidate_list.append((train_dataloader, val_dataloader))
 
-        candidate_list = CombinedDataset(dataset_path = args.training_data_dir,
-                                         batch_size=args.batch_size,
-                                         num_workers=args.n_threads, 
-                                         dataset_list = my_dataset,
-                                         is_specific=False, dataset_name = 'kitti_2012') 
-
-        print(len(candidate_list))
-
-
-    # Dataloader
-    # train_dataloader = DataLoader(train_dataset,
-    #                               batch_size=args.batch_size,
-    #                               shuffle=True,
-    #                               num_workers=args.n_threads)
-
-    # val_dataloader = DataLoader(val_dataset,
-    #                             batch_size=args.batch_size,
-    #                             shuffle=False,
-    #                             num_workers=args.n_threads)
+    print(len(candidate_list))
 
     # check if gt flow is ok
     if(args.check_gt == True) :
         print("Check gt pair(training set)")
-        check_gt_pair(train_dataset)
+        check_gt_pair(train_list)
         print("Check gt pair(validation set)")
-        check_gt_pair(val_dataset)
+        check_gt_pair(val_list)
 
     # models
     '''

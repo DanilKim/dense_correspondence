@@ -1,6 +1,10 @@
+import os
+import sys
 import torch
 import numpy as np
 import torch.nn.functional as F
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+from datasets.util import random_crop, center_crop, resize
 
 
 def TensorToArray(tensor, type):
@@ -35,6 +39,47 @@ class ArrayToTensor(object):
             return tensor.float()
         else:
             return tensor
+
+
+class RandomCrop(object):
+    """Randomly crop input numpy image array (H x W x C) to (crop_size x crop_size x C).
+       crop_size <= min(H, W)"""
+    def __init__(self, crop_size):
+        self.crop_size = crop_size
+        self.seed = 2020
+        self.value = [0,0,0]
+
+    def __call__(self, img):
+        return random_crop(img, self.crop_size, self.seed, self.value)
+
+
+class CenterCrop(object):
+    """Center crop input numpy image array (H x W x C) to (crop_size x crop_size x C).
+       crop_size <= min(H, W)"""
+    def __init__(self, crop_size):
+        self.crop_size = crop_size
+
+    def __call__(self, img):
+        return center_crop(img, self.crop_size)
+
+
+class Resize(object):
+    """Resize input numpy image array (H x W x C) to (size x size x C).
+       size <= min(H, W)"""
+    def __init__(self, size):
+        self.size = size
+
+    def __call__(self, img):
+        return resize(img, self.size)
+
+
+class Raw(object):
+    """ Identity transform (input image = output image)"""
+    def __init__(self, size):
+        self.size = size
+
+    def __call__(self, img):
+        return img
 
 
 class ResizeFlow(object):

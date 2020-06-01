@@ -221,7 +221,7 @@ def train_epoch(net,
         Loss.backward()
         optimizer.step()
 
-        if i < 4:  # log first output of first batches
+        if i < 0:  # log first output of first batches
             if apply_mask:
                 plot_during_training(save_path, epoch, i, apply_mask,
                                      h_original, w_original, h_256, w_256,
@@ -350,7 +350,7 @@ def validate_epoch(net,
                 EPE_array[(len(output_net_original) + index_reso_256), i] = EPE
             # must be both in shape Bx2xHxW
 
-            if i < 4:
+            if i < 0:
                 # log first output of first batches
                 if apply_mask:
                     plot_during_training(save_path, epoch, i, apply_mask,

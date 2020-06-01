@@ -44,6 +44,7 @@ def make_dataset(dataset_dir, split, dataset_type='clean'):
 
     return split2list(images, split, default_split=0.87)
 
+
 def mpisintel_loader(root, path_imgs, path_flo):
     imgs = [os.path.join(root,path) for path in path_imgs]
     flo = os.path.join(root,path_flo)
@@ -65,6 +66,13 @@ def mpisintel_loader(root, path_imgs, path_flo):
     noc_mask = (occluded_mask == 0).astype(np.uint8)
 
     return [imread(img).astype(np.uint8) for img in imgs], load_flo(flo), valid_mask.astype(np.uint8)
+
+
+def mpisintel_allpair_loader(root, path_imgs, path_flo):
+    imgs = [os.path.join(root, path) for path in path_imgs]
+    flo = os.path.join(root, path_flo)
+    mask = os.path.join(os.path.dirname(flo), 'occlusion.png')
+    return [imread(img).astype(np.uint8) for img in imgs], load_flo(flo), 1 - imread(mask).astype(np.float32)/255
 
 
 def mpi_sintel_clean(root, source_image_transform=None, target_image_transform=None, flow_transform=None,
@@ -125,47 +133,46 @@ def mpi_sintel_both(root, source_image_transform=None, target_image_transform=No
     return train_dataset, test_dataset
 
 
+def make_allpair_dataset(dataset_dir, split):
+    images = []
+    for sub_root in dataset_dir:
+        # Make sure that the folders exist
+        if not os.path.isdir(sub_root):
+            raise ValueError("the training directory path that you indicated does not exist !")
+        flow_map = os.path.join(sub_root, 'flow.flo')
+        source_img = os.path.join(sub_root, 'target.png') # source image
+        target_img = os.path.join(sub_root, 'source.png') # target image
+        if not (os.path.isfile(source_img) and os.path.isfile(target_img)):
+            continue
+        images.append([[source_img, target_img], flow_map])
+
+    return split2list(images, split, default_split=0.95)
+
+
 def mpi_sintel_allpair(root, dataset="sintel_allpair", source_image_transform=None, target_image_transform=None,  
-                    flow_transform=None, co_transform=None, split=0.7, mask=True, transform_type='raw', crop_size=512) : 
+                    flow_transform=None, co_transform=None, split=None) :
     ''' load images from generated sintel all pair dataset.'''
     if not os.path.isdir(root): 
         raise "(mip sintel_allpair : Invalid path for " + os.path.join(root, dataset)
-    train_list_dir, eval_list_dir = train_test_split_dir(os.path.join(root, dataset), split)
 
-    train_list=[]
-    for sub_root in train_list_dir:
-        images = []
-        # Make sure that the folders exist
-        if not os.path.isdir(os.path.join(root, sub_root)):
-            raise ValueError("the training directory path that you indicated does not exist !")
-        flow_map = os.path.join(sub_root, 'flow.flo')
-        source_img = os.path.join(sub_root, 'target.png') # source image
-        target_img = os.path.join(sub_root, 'source.png') # target image
-        occ_mask = os.path.join(sub_root, 'occlusion.png') # occ_mask
-        images.append([[source_img, target_img], flow_map, occ_mask])
-        sub_train_list, _ = split2list(images, split, default_split=split)
-        train_list.extend(sub_train_list)
+    pair_dirs = []
+    for scene_list in os.listdir(root):  # for scene list e.g) alley_1, ambush_4
+        grand_parent_dir = os.path.join(os.path.join(root, scene_list))
+        for start_list in os.listdir(grand_parent_dir): 
+            parent_dir = os.path.join(grand_parent_dir, start_list)
+            for end_list in os.listdir(parent_dir):
+                pair_dirs.append(os.path.join(parent_dir, end_list))
 
-    test_list=[]
-    for sub_root in eval_list_dir:
-        images = []
-        # Make sure that the folders exist
-        if not os.path.isdir(os.path.join(root, sub_root)):
-            raise ValueError("the training directory path that you indicated does not exist !")
-        flow_map = os.path.join(sub_root, 'flow.flo')
-        source_img = os.path.join(sub_root, 'target.png') # source image
-        target_img = os.path.join(sub_root, 'source.png') # target image
-        occ_mask = os.path.join(sub_root, 'occlusion.png') # occ_mask
-        images.append([[source_img, target_img], flow_map, occ_mask])
-        _, sub_test_list = split2list(images, split, default_split=split)
-        test_list.extend(sub_test_list)
+    train_list, test_list = make_allpair_dataset(pair_dirs, split) 
 
     root = '.'
-    train_dataset = SintelAllpairListDataset(root, train_list, source_image_transform=source_image_transform,
-                                target_image_transform=target_image_transform, mask=mask,
-                                flow_transform=flow_transform, co_transform=co_transform, transform_type=transform_type, crop_size=crop_size)
-    test_dataset = SintelAllpairListDataset(root, test_list, source_image_transform=source_image_transform,
-                               target_image_transform=target_image_transform, mask=mask,
-                               flow_transform=flow_transform, co_transform=co_transform, transform_type=transform_type, crop_size=crop_size)
+    train_dataset = ListDataset(root, train_list, source_image_transform=source_image_transform,
+                                target_image_transform=target_image_transform, mask=True,
+                                loader=mpisintel_allpair_loader,
+                                flow_transform=flow_transform, co_transform=co_transform)
+    test_dataset = ListDataset(root, test_list, source_image_transform=source_image_transform,
+                               target_image_transform=target_image_transform, mask=True,
+                               loader=mpisintel_allpair_loader,
+                               flow_transform=flow_transform, co_transform=co_transform)
 
     return (train_dataset, test_dataset)
