@@ -94,12 +94,11 @@ class ListDataset(data.Dataset):
         # transforms here will always contain conversion to tensor (then channel is before)
         if self.source_image_transform is not None:
             inputs[0] = self.source_image_transform(inputs[0])
+            mask = self.source_image_transform(mask).long()
         if self.target_image_transform is not None:
             inputs[1] = self.target_image_transform(inputs[1])
         if self.flow_transform is not None:
             gt_flow = self.flow_transform(gt_flow)
-
-        mask = mask.astype(np.uint8)
 
         W_source = inputs[0].shape[2]
         H_source = inputs[0].shape[1]
@@ -120,7 +119,6 @@ class ListDataset(data.Dataset):
         H_mask = mask.shape[0]
 
         mask_trans = mask[:int(H_mask / 16) * 16, :int(W_mask / 16) * 16]
-        mask_trans = torch.from_numpy(mask_trans).long()
 
         return {'source_image': source,
                 'target_image': target,

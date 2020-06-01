@@ -31,7 +31,8 @@ class ArrayToTensor(object):
 
         if not isinstance(array, np.ndarray):
             array = np.array(array)
-        array = np.transpose(array, (2, 0, 1))
+        if len(array.shape) == 3:
+            array = np.transpose(array, (2, 0, 1))
         # handle numpy array
         tensor = torch.from_numpy(array)
         # put it from HWC to CHW format
@@ -60,7 +61,7 @@ class CenterCrop(object):
         self.crop_size = crop_size
 
     def __call__(self, img):
-        return center_crop(img, self.crop_size)
+        return center_crop(img, self.crop_size)[0]
 
 
 class Resize(object):

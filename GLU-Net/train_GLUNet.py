@@ -106,7 +106,7 @@ if __name__ == "__main__":
     torch.cuda.manual_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = False
-    #   Decode training set information from input string #
+    #   Decode training set information (root and call function for each dataset) from input string #
     roots, train_sets = parse_dataset_info(args.dataset_list)
 
     print(device)
