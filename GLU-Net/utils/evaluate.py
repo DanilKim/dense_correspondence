@@ -146,12 +146,13 @@ def calculate_epe_and_pck_per_dataset(test_dataloader, network, device, threshol
     output = {'final_eape': np.mean(aepe_array),
               'pck_alpha_0_05_average_per_image': np.mean(pck_alpha_0_05_over_image),
               'pck_thresh_1_average_per_image': np.mean(pck_thresh_1_over_image),
-              'pck_thresh_5_average_per_image': np.mean(pck_thresh_5_over_image),
-              'alpha_threshold': threshold_range.tolist(),
-              'pixel_threshold': np.round(threshold_range * img_size.cpu().numpy(), 2).tolist(),
-              'pck_per_threshold_over_dataset': np.float32(array_n_correct_correspondences /
-                                                           (n_registered_pxs + 1e-6)).tolist()}
+              'pck_thresh_5_average_per_image': np.mean(pck_thresh_5_over_image),}
+              #'alpha_threshold': threshold_range.tolist(),
+              #'pixel_threshold': np.round(threshold_range * img_size.cpu().numpy(), 2).tolist(),
+              #'pck_per_threshold_over_dataset': np.float32(array_n_correct_correspondences /
+              #                                             (n_registered_pxs + 1e-6)).tolist()}
 
+    print(output)
     if compute_F1:
         output['kitti2015-F1'] = np.mean(F1)
     return output

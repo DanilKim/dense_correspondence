@@ -1,6 +1,6 @@
 import os.path
 import glob
-from .listdataset import ListDataset, SintelAllpairListDataset
+from .listdataset import ListDataset
 from datasets.util import split2list
 from utils import co_flow_and_images_transforms
 from imageio import imread
