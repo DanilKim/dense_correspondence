@@ -3,6 +3,9 @@ SAVE_DIR=$2
 
 GPU_ID=1
 
+mv ./snapshots/${MODEL_DIR}/model_best.pth ./snapshots/${MODEL_DIR}/GLUNet_Sintel.pth
+
+
 CUDA_VISIBLE_DEVICES=${GPU_ID} python ./eval.py \
   --pre_trained_models Sintel \
   --pre_trained_models_dir ./snapshots/${MODEL_DIR} \
@@ -24,3 +27,5 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./eval.py \
   --datasets TSS \
   --save_dir ./results/${SAVE_DIR}_TSS_PASCAL \
   --data_dir ./GLUNet_data/testing_datasets/TSS_CVPR2016/PASCAL
+
+mv ./snapshots/${MODEL_DIR}/GLUNet_Sintel.pth model_best.pth ./snapshots/${MODEL_DIR}/model_best.pth
