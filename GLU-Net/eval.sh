@@ -28,4 +28,4 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./eval.py \
   --save_dir ./results/${SAVE_DIR}_TSS_PASCAL \
   --data_dir ./GLUNet_data/testing_datasets/TSS_CVPR2016/PASCAL
 
-mv ./snapshots/${MODEL_DIR}/GLUNet_Sintel.pth model_best.pth ./snapshots/${MODEL_DIR}/model_best.pth
+mv ./snapshots/${MODEL_DIR}/GLUNet_Sintel.pth ./snapshots/${MODEL_DIR}/model_best.pth

@@ -1,6 +1,28 @@
 import numpy as np
 import cv2
 
+def corresponding_map_from_flow_fields(image, disp_x, disp_y):
+    """
+    map_x contains the index of the future horizontal position of each pixel [i,j] while map_y contains the index of the future y
+    position of each pixel [i,j]
+
+    All are numpy arrays
+    :param image: image to remap, HxWxC
+    :param disp_x: displacement on the horizontal direction to apply to each pixel. must be float32. HxW
+    :param disp_y: isplacement in the vertical direction to apply to each pixel. must be float32. HxW
+    :return:
+    map_x, map_y. HxW
+    """
+    h_scale, w_scale = disp_x.shape[:2]
+
+    # estimate the grid
+    X, Y = np.meshgrid(np.linspace(0, w_scale - 1, w_scale),
+                       np.linspace(0, h_scale - 1, h_scale))
+    map_x = (np.clip(X + disp_x, 0, w_scale - 1)).astype(np.float32)
+    map_y = (np.clip(Y + disp_y, 0, h_scale - 1)).astype(np.float32)
+
+    return map_x, map_y
+
 
 def remap_using_flow_fields(image, disp_x, disp_y, interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_CONSTANT):
     """
@@ -21,8 +43,9 @@ def remap_using_flow_fields(image, disp_x, disp_y, interpolation=cv2.INTER_LINEA
     # estimate the grid
     X, Y = np.meshgrid(np.linspace(0, w_scale - 1, w_scale),
                        np.linspace(0, h_scale - 1, h_scale))
-    map_x = (X+disp_x).astype(np.float32)
-    map_y = (Y+disp_y).astype(np.float32)
+    map_x = (X + disp_x).astype(np.float32)
+    map_y = (Y + disp_y).astype(np.float32)
+
     remapped_image = cv2.remap(image, map_x, map_y, interpolation=interpolation, borderMode=border_mode)
 
     return remapped_image

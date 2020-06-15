@@ -7,12 +7,44 @@ import torch
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from datasets.training_dataset import HomoAffTps_Dataset
-from utils.pixel_wise_mapping import remap_using_flow_fields
+from utils.pixel_wise_mapping import remap_using_flow_fields, corresponding_map_from_flow_fields, remap_using_correspondence_map
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 import imageio
 from utils.image_transforms import ArrayToTensor
 from utils.io import writeFlow
+
+
+def visualize_pair_and_flow(axis, source, target, flow, mask=None, matching_lines=False):
+    height, width, _ = source.shape
+    margin = 30
+    composite = np.zeros((height, 2 * width + margin, 3), ) + 255
+    h_off = width + margin
+    composite[:height, :width, :] = target / 255
+    composite[:height, h_off:h_off + width, :] = source / 255
+
+    axis[0].imshow(composite)
+    map_x, map_y = corresponding_map_from_flow_fields(source, flow[:, :, 0], flow[:, :, 1])
+    remapped_gt = remap_using_correspondence_map(source, map_x, map_y)
+    if mask is not None:
+        remapped_gt = remapped_gt * mask[..., np.newaxis]
+
+    if matching_lines:
+        assert mask is not None
+        valid_points_y, valid_points_x = np.nonzero(mask)
+        cnt = 0
+        AEPE = 0
+        for x, y in zip(valid_points_x, valid_points_y):
+            cnt += 1
+            pix_1 = target[y, x, :]
+            pix_2 = source[int(map_y[y, x]), int(map_x[y, x]), :]
+            AEPE += np.linalg.norm(pix_1 - pix_2)
+            if cnt % 10000 != 1:
+                continue
+            axis[0].plot([x, h_off + map_x[y, x]], [y, map_y[y, x]], 'r', linewidth=0.5)
+
+    axis[1].imshow(remapped_gt)
+    axis[1].set_title("Warped source image according to ground truth flow")
 
 
 if __name__ == "__main__":
@@ -102,22 +134,42 @@ if __name__ == "__main__":
         writeFlow(flow_gt, name_flow, flow_dir)
         imageio.imwrite(os.path.join(args.save_dir, 'images/', base_name + '_img_1.jpg'), image_source)
         imageio.imwrite(os.path.join(args.save_dir, 'images/', base_name + '_img_2.jpg'), image_target)
-        if source_flow:
-            image_mask = minibatch['correspondence_mask'][0]
-            image_mask = ((1 - image_mask) * 255).numpy().astype(np.uint8)
-            imageio.imwrite(os.path.join(args.save_dir, 'mask/', base_name + '_occlusion.png'), image_mask)
 
-        # plotting to make sure that everything is working
         if args.plot and i < 4:
             # just for now
             fig, axis = plt.subplots(1, 3, figsize=(20, 20))
-            axis[0].imshow(image_source)
-            axis[0].set_title("Image source")
-            axis[1].imshow(image_target)
-            axis[1].set_title("Image target")
-            remapped_gt = remap_using_flow_fields(image_source, flow_gt[:, :, 0], flow_gt[:, :, 1])
 
-            axis[2].imshow(remapped_gt)
-            axis[2].set_title("Warped source image according to ground truth flow")
-            fig.savefig(os.path.join(args.save_dir, 'synthetic_pair_{}'.format(i)), bbox_inches='tight')
-            plt.close(fig)
+            visualize_pair_and_flow(axis, image_source, image_target, flow_gt, matching_lines=False)
+            # axis[0].imshow(image_source)
+            # axis[0].set_title("Image source")
+            # axis[1].imshow(image_target)
+            # axis[1].set_title("Image target")
+            # remapped_gt = remap_using_flow_fields(image_source, flow_gt[:, :, 0], flow_gt[:, :, 1])
+            #
+            # axis[2].imshow(remapped_gt)
+            # axis[2].set_title("Warped source image according to ground truth flow")
+            # fig.savefig(os.path.join(args.save_dir, 'synthetic_pair_{}'.format(i)), bbox_inches='tight')
+            # plt.close(fig)
+
+        if source_flow:
+            image_inter = minibatch['intermediate_image'][0].permute(1, 2, 0).numpy().astype(np.uint8)
+            flow_si = minibatch['flow_of'][0].permute(1, 2, 0).numpy()
+            flow_it = minibatch['flow_tf'][0].permute(1, 2, 0).numpy()
+            mask_si = minibatch['mask_of'][0].numpy()
+            mask_it = minibatch['mask_tf'][0].numpy()
+            mask_gt = minibatch['correspondence_mask'][0].numpy()
+            occ_mask = ((1 - mask_gt) * 255).astype(np.uint8)
+            imageio.imwrite(os.path.join(args.save_dir, 'mask/', base_name + '_occlusion.png'), occ_mask)
+
+            # plotting to make sure that everything is working
+            if args.plot and i % 1000 == 1:
+                # just for now
+                fig, axis = plt.subplots(3, 2, figsize=(20, 20))
+
+                visualize_pair_and_flow(axis[0], image_source, image_inter, flow_si, mask_si, matching_lines=True)
+                visualize_pair_and_flow(axis[1], image_inter, image_target, flow_it, mask_it, matching_lines=True)
+                visualize_pair_and_flow(axis[2], image_source, image_target, flow_gt, mask_gt, matching_lines=True)
+
+                fig.savefig(os.path.join(args.save_dir, 'synthetic_pair_{}'.format(i)), bbox_inches='tight')
+                plt.close(fig)
+
