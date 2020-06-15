@@ -230,7 +230,7 @@ class HomoAffTps_Dataset(Dataset):
         # rescale grid according to crop_factor and padding_factor
         sampling_grid.data = sampling_grid.data * padding_factor * crop_factor
         # sample transformed image
-        warped_image_batch = F.grid_sample(image, sampling_grid)
+        warped_image_batch = F.grid_sample(image, sampling_grid, padding_mode="reflection")
         return warped_image_batch
 
     def generate_grid(self, out_h, out_w, theta=None):
@@ -543,7 +543,7 @@ class HomoAffTps_Dataset(Dataset):
             img_src_orig = torch.Tensor(img_src_orig.astype(np.float32))
             img_src_orig = img_src_orig.permute(2, 0, 1)
             img_orig_target_vrbl = F.grid_sample(img_src_orig.unsqueeze(0),
-                                                 grid_full)
+                                                 grid_full, padding_mode="reflection")
             img_orig_target_vrbl = \
                 img_orig_target_vrbl.squeeze().permute(1, 2, 0)
 
@@ -637,7 +637,8 @@ class HomoAffTps_Dataset(Dataset):
                     'flow_tf': flow,
                     'mask_tf': transform_mask.numpy(),
                     'flow_map': flow_map,  # here flow map is 2 x h x w
-                    'correspondence_mask':  (transform_mask.float() * warped_source_mask[0] * w_mask[0] * final_mask[0]).detach().numpy().astype(np.uint8)}
+                    'correspondence_mask':  np.logical_and(transform_mask.detach().numpy(),
+                                                           warped_source_mask[0].detach().numpy()).astype(np.uint8)}
         else:
             # here we get both the pyramid of mappings and the last mapping (at the highest resolution)
             return {'source_image': cropped_source_image,

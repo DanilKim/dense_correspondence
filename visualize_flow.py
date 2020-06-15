@@ -20,11 +20,11 @@ def load_flo(path):
 
 
 if __name__ == "__main__":
-    path = os.path.join('sintel', 'extracted_pairs', 'clean', 'mag_20_0.2', 'bandage_2', 'start_26', 'end_44')
-    image_1 = imread(os.path.join(path, 'source.png'))
-    image_2 = imread(os.path.join(path, 'target.png'))
-    flow    = load_flo(os.path.join(path, 'flow.flo'))
-    mask    = imread(os.path.join(path, 'occlusion.png'))
+    path = os.path.join('GLUNet_data/training_datasets/sintel', 'extracted_pairs', 'clean-geo', 'all', 'train')
+    image_1 = imread(os.path.join(path, 'images', 'image_2_img_1.jpg'))
+    image_2 = imread(os.path.join(path, 'images', 'image_2_img_2.jpg'))
+    flow    = load_flo(os.path.join(path, 'flow', 'image_2_flow.flo'))
+    mask    = imread(os.path.join(path, 'mask', 'image_2_occlusion.png'))
     mask    = 1 - mask
     valid_points_y, valid_points_x = np.nonzero(mask)
 
@@ -38,8 +38,8 @@ if __name__ == "__main__":
 
     X, Y = np.meshgrid(np.linspace(0, width-1, width),
                        np.linspace(0, height-1, height))
-    map_x = (X + flow[:,:,0]).astype(np.float32)
-    map_y = (Y + flow[:,:,1]).astype(np.float32)
+    map_x = (np.clip(X + flow[:,:,0], 0, width-1)).astype(np.float32)
+    map_y = (np.clip(Y + flow[:,:,1], 0, height-1)).astype(np.float32)
     remapped_image_1 = cv2.remap(image_1, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
     remapped_image_2 = cv2.remap(image_2, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
     masked_remapped_image_2 = remapped_image_2 * (mask[:,:,np.newaxis]/255)
@@ -75,8 +75,8 @@ if __name__ == "__main__":
         print('---------------')
         print(pix_1)
         print(pix_2)
-        print(np.subtract(pix_1,pix_2))
-        print(np.linalg.norm(pix_1-pix_2))
+        print(np.subtract(pix_1.float(),pix_2.float()))
+        print(np.linalg.norm(pix_1.float()-pix_2.float()))
         #print(x, y, int(map_x[y,x]), int(map_y(y,x)), float(pix_1[0]), float(pix_1[1]), float(pix_1[2]), float(pix_2[0]), float(pix_2[1]), float(pix_2[2]))
         #print("(x,y) = (%d,%d), (x',y') = (%d,%d) / I_s(x,y) = (%.2f,%.2f,%.2f), I_t(x',y') = (%.2f,%.2f,%.2f)"
         #      % (x, y, int(map_x[y,x]), int(map_y(y,x)), float(pix_1[0]), float(pix_1[1]), float(pix_1[2]), float(pix_2[0]), float(pix_2[1]), float(pix_2[2])))
