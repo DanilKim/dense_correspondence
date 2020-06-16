@@ -14,6 +14,8 @@ from utils.image_transforms import ArrayToTensor
 from tqdm import tqdm
 from utils.io import writeFlow
 import torch.nn as nn
+from utils.pixel_wise_mapping import remap_using_flow_fields
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description="GLUNET evaluation on PF-PASCAL")
 parser.add_argument('--pre_trained_models_dir', type=str, default='pre_trained_models/',
@@ -27,8 +29,13 @@ parser.add_argument('--feature_w', type=int, default=20, help='width of feature 
 parser.add_argument('--test_csv_path', type=str, default='GLUNet_data/testing_datasets/PF-dataset-PASCAL/PF-dataset-PASCAL/bbox_test_pairs_pf_pascal.csv', help='directory of test csv file')
 parser.add_argument('--test_image_path', type=str, default='GLUNet_data/testing_datasets/PF-dataset-PASCAL', help='directory of test data')
 parser.add_argument('--eval_type', type=str, default='image_size', choices=('bounding_box','image_size'), help='evaluation type for PCK threshold (bounding box | image size)')
+parser.add_argument('--visualize', type=bool, default=True)
+parser.add_argument('--write_dir', type=str, default="visualize")
 args = parser.parse_args()
 
+args.write_dir = os.path.join(args.write_dir, 'pf-pascal-eval_' + os.path.basename(args.pre_trained_models_dir))
+if args.visualize and not os.path.isdir(args.write_dir):
+    os.makedirs(args.write_dir)
 # os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 # PCK metric from 'https://github.com/ignacio-rocco/weakalign/blob/master/util/eval_util.py'
@@ -74,25 +81,21 @@ with torch.no_grad():
     total_correct_points = 0
     total_points = 0
     for i, batch in tqdm(enumerate(test_loader)):
-        source_image = batch['image1'].to(device)
-        target_image = batch['image2'].to(device)
+        source_image = batch['image1_rgb'].to(device)
+        target_image = batch['image2_rgb'].to(device)
+
+        raw_src = source_image.squeeze().permute(1, 2, 0).cpu().numpy()
+        raw_tgt = target_image.squeeze().permute(1, 2, 0).cpu().numpy()
 
         src_image_H = int(batch['image1_size'][0][0])
         src_image_W = int(batch['image1_size'][0][1])
         tgt_image_H = int(batch['image2_size'][0][0])
         tgt_image_W = int(batch['image2_size'][0][1])
 
-        grid_X, grid_Y = np.meshgrid(np.linspace(-1, 1, tgt_image_W), np.linspace(-1, 1, tgt_image_H))
-        grid_X = torch.tensor(grid_X, dtype=torch.float, requires_grad=False).to(device)
-        grid_Y = torch.tensor(grid_Y, dtype=torch.float, requires_grad=False).to(device)
-        grid_XY = torch.cat((grid_X.view(1,tgt_image_H,tgt_image_W,1), grid_Y.view(1,tgt_image_H,tgt_image_W,1)),3)
-
         # get a flow of target to source // 
-        flow_T2S = net.estimate_flow(target_image, source_image, device, mode='channel_first')
+        flow_T2S = net.estimate_flow(target_image*255, source_image*255, device, mode='channel_first')
 
-        if (args.visualize):
-            from utils.pixel_wise_mapping import remap_using_flow_fields
-            import matplotlib.pyplot as plt
+        if args.visualize:
             resized_target = F.interpolate(target_image, size=(flow_T2S.shape[2], flow_T2S.shape[3]), mode='bilinear',
                                            align_corners=True)
             warped_source_image = remap_using_flow_fields(resized_target.squeeze().permute(1, 2, 0).cpu().numpy(),
@@ -106,16 +109,19 @@ with torch.no_grad():
             axis2.set_title('Source image')
             axis3.imshow(warped_source_image)
             axis3.set_title('Warped target image according to estimated T2S_flow by GLU-Net')
-            #fig.savefig(os.path.join(args.write_dir, 'Warped_' + tgt_name + '_to_' + src_name + '.png'),
-            #            bbox_inches='tight')
+            fig.savefig(os.path.join(args.write_dir, str(i) + '.png'),
+                        bbox_inches='tight')
             plt.close(fig)
 
-        grid_warped = F.grid_sample(target_image, flow_T2S.permute(0, 2, 3, 1)).to(device)
-        warped_target = F.grid_sample((batch['image2_rgb']).to(device), flow_T2S.permute(0, 2, 3, 1))
-        grid = F.interpolate(grid_warped, size = (tgt_image_H,tgt_image_W), mode='bilinear', align_corners=True)
-        #grid = F.interpolate(flow_T2S, size=(tgt_image_H, tgt_image_W), mode='bilinear', align_corners=True)
-        grid = grid.permute(0,2,3,1)
-        # grid = grid + grid_XY
+        grid_X, grid_Y = np.meshgrid(np.linspace(0, tgt_image_W-1, tgt_image_W), np.linspace(0, tgt_image_H-1, tgt_image_H))
+        grid_X = torch.tensor(grid_X, dtype=torch.float, requires_grad=False).to(device)
+        grid_Y = torch.tensor(grid_Y, dtype=torch.float, requires_grad=False).to(device)
+        grid = torch.cat((grid_X.view(1,tgt_image_H,tgt_image_W,1), grid_Y.view(1,tgt_image_H,tgt_image_W,1)),3)
+
+        flow_T2S_resized = F.interpolate(flow_T2S, size = (tgt_image_H, tgt_image_W), mode='bilinear', align_corners=True)
+
+        flow_T2S_resized = flow_T2S_resized.permute(0,2,3,1)
+        grid = flow_T2S_resized + grid
         grid_np = grid.cpu().data.numpy()
 
         image1_points = batch['image1_points'][0]
@@ -135,8 +141,8 @@ with torch.no_grad():
             if point_y == tgt_image_H:
                 point_y = point_y - 1
 
-            est_y = (grid_np[0,point_y,point_x,1] + 1)*(src_image_H-1)/2
-            est_x = (grid_np[0,point_y,point_x,0] + 1)*(src_image_W-1)/2
+            est_y = (grid_np[0,point_y,point_x,1] + 1)#*(src_image_H-1)/2
+            est_x = (grid_np[0,point_y,point_x,0] + 1)#*(src_image_W-1)/2
             est_image1_points[:,j] = [est_x,est_y]
 
         total_correct_points += correct_keypoints(batch['image1_points'], torch.FloatTensor(est_image1_points).unsqueeze(0), batch['L_pck'], alpha=0.1)
