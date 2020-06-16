@@ -84,7 +84,11 @@ class PF_Pascal(Dataset):
         'L_pck': L_pck,
         'image1_size': image1_size, 
         'image2_size': image2_size, 
-        'class_num':class_num
+        'class_num':class_num,
+        'image1_name' : self.image_A_names[idx],
+        'image2_name' : self.image_B_names[idx],
+        'image1_raw' : np.squeeze(np.asarray(image1)),
+        'image2_raw' : np.squeeze(np.asarray(image2))
         }
 
     def __len__(self):
