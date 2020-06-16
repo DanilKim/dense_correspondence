@@ -20,12 +20,12 @@ parser.add_argument('--pre_trained_models_dir', type=str, default='pre_trained_m
                     help='Directory containing the pre-trained-models.')
 parser.add_argument('--save', default=True, type=bool,
                     help='save the flow files ? default is False')
-parser.add_argument('--save_dir', type=str, default='evaluation/',
+parser.add_argument('--save_dir', type=str, default='pf-pascal-eval',
                     help='path to directory to save the text files and results')                    
 parser.add_argument('--feature_h', type=int, default=20, help='height of feature volume')
 parser.add_argument('--feature_w', type=int, default=20, help='width of feature volume')
-parser.add_argument('--test_csv_path', type=str, default='/home/kinux98/study/dataset/PF-dataset-PASCAL/PF-dataset-PASCAL/bbox_test_pairs_pf_pascal.csv', help='directory of test csv file')
-parser.add_argument('--test_image_path', type=str, default='/home/kinux98/study/dataset/PF-dataset-PASCAL', help='directory of test data')
+parser.add_argument('--test_csv_path', type=str, default='GLUNet_data/testing_datasets/PF-dataset-PASCAL/PF-dataset-PASCAL/bbox_test_pairs_pf_pascal.csv', help='directory of test csv file')
+parser.add_argument('--test_image_path', type=str, default='GLUNet_data/testing_datasets/PF-dataset-PASCAL', help='directory of test data')
 parser.add_argument('--eval_type', type=str, default='image_size', choices=('bounding_box','image_size'), help='evaluation type for PCK threshold (bounding box | image size)')
 args = parser.parse_args()
 
@@ -54,7 +54,7 @@ test_loader = DataLoader(dataset=test_dataset,
 # Instantiate model
 print("Instantiate model")
 #net = SFNet(args.feature_h, args.feature_w, beta=args.beta, kernel_sigma = args.kernel_sigma)
-net = GLU_Net(model_type='GLUNet',
+net = GLU_Net(model_type='Sintel',
               path_pre_trained_models=args.pre_trained_models_dir,
               consensus_network=False,
               cyclic_consistency=True,
@@ -82,11 +82,40 @@ with torch.no_grad():
         tgt_image_H = int(batch['image2_size'][0][0])
         tgt_image_W = int(batch['image2_size'][0][1])
 
+        grid_X, grid_Y = np.meshgrid(np.linspace(-1, 1, tgt_image_W), np.linspace(-1, 1, tgt_image_H))
+        grid_X = torch.tensor(grid_X, dtype=torch.float, requires_grad=False).to(device)
+        grid_Y = torch.tensor(grid_Y, dtype=torch.float, requires_grad=False).to(device)
+        grid_XY = torch.cat((grid_X.view(1,tgt_image_H,tgt_image_W,1), grid_Y.view(1,tgt_image_H,tgt_image_W,1)),3)
+
         # get a flow of target to source // 
         flow_T2S = net.estimate_flow(target_image, source_image, device, mode='channel_first')
-        grid_warped = F.grid_sample(target_image, flow_T2S.permute(0,2,3,1)).to(device)
+
+        if (args.visualize):
+            from utils.pixel_wise_mapping import remap_using_flow_fields
+            import matplotlib.pyplot as plt
+            resized_target = F.interpolate(target_image, size=(flow_T2S.shape[2], flow_T2S.shape[3]), mode='bilinear',
+                                           align_corners=True)
+            warped_source_image = remap_using_flow_fields(resized_target.squeeze().permute(1, 2, 0).cpu().numpy(),
+                                                          flow_T2S.squeeze()[0].cpu().numpy(),
+                                                          flow_T2S.squeeze()[1].cpu().numpy())
+
+            fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
+            axis1.imshow(resized_target.squeeze().permute(1, 2, 0).cpu().numpy())
+            axis1.set_title('Target image')
+            axis2.imshow(raw_src)
+            axis2.set_title('Source image')
+            axis3.imshow(warped_source_image)
+            axis3.set_title('Warped target image according to estimated T2S_flow by GLU-Net')
+            #fig.savefig(os.path.join(args.write_dir, 'Warped_' + tgt_name + '_to_' + src_name + '.png'),
+            #            bbox_inches='tight')
+            plt.close(fig)
+
+        grid_warped = F.grid_sample(target_image, flow_T2S.permute(0, 2, 3, 1)).to(device)
+        warped_target = F.grid_sample((batch['image2_rgb']).to(device), flow_T2S.permute(0, 2, 3, 1))
         grid = F.interpolate(grid_warped, size = (tgt_image_H,tgt_image_W), mode='bilinear', align_corners=True)
-        grid = grid.permute(0,2,3,1) 
+        #grid = F.interpolate(flow_T2S, size=(tgt_image_H, tgt_image_W), mode='bilinear', align_corners=True)
+        grid = grid.permute(0,2,3,1)
+        # grid = grid + grid_XY
         grid_np = grid.cpu().data.numpy()
 
         image1_points = batch['image1_points'][0]

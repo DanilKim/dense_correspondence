@@ -75,7 +75,7 @@ class PF_Pascal(Dataset):
             raise ValueError('Invalid eval_type')
 
         return {
-        'image1_rgb': transforms.ToTensor()(image1), 
+        'image1_rgb': transforms.ToTensor()(image1),
         'image2_rgb': transforms.ToTensor()(image2),
         'image1': self.normalize(image1_var), 
         'image2': self.normalize(image2_var),
