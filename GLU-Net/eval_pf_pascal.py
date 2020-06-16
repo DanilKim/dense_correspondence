@@ -14,13 +14,8 @@ from utils.image_transforms import ArrayToTensor
 from tqdm import tqdm
 from utils.io import writeFlow
 import torch.nn as nn
-<<<<<<< HEAD
 from utils.pixel_wise_mapping import remap_using_flow_fields
 import matplotlib.pyplot as plt
-=======
-import cv2
-from matplotlib import pyplot as plt
->>>>>>> origin/kinux98
 
 parser = argparse.ArgumentParser(description="GLUNET evaluation on PF-PASCAL")
 parser.add_argument('--pre_trained_models_dir', type=str, default='pre_trained_models/',
@@ -34,46 +29,15 @@ parser.add_argument('--feature_w', type=int, default=20, help='width of feature 
 parser.add_argument('--test_csv_path', type=str, default='GLUNet_data/testing_datasets/PF-dataset-PASCAL/PF-dataset-PASCAL/bbox_test_pairs_pf_pascal.csv', help='directory of test csv file')
 parser.add_argument('--test_image_path', type=str, default='GLUNet_data/testing_datasets/PF-dataset-PASCAL', help='directory of test data')
 parser.add_argument('--eval_type', type=str, default='image_size', choices=('bounding_box','image_size'), help='evaluation type for PCK threshold (bounding box | image size)')
-<<<<<<< HEAD
-parser.add_argument('--visualize', type=bool, default=True)
+parser.add_argument('--visualize', type=bool, default=False)
 parser.add_argument('--write_dir', type=str, default="visualize")
 args = parser.parse_args()
 
 args.write_dir = os.path.join(args.write_dir, 'pf-pascal-eval_' + os.path.basename(args.pre_trained_models_dir))
 if args.visualize and not os.path.isdir(args.write_dir):
     os.makedirs(args.write_dir)
+
 # os.environ["CUDA_VISIBLE_DEVICES"]="0"
-=======
-parser.add_argument('--visualize', type=bool, default=False)
-parser.add_argument('--write_dir', type=str, default="./pascal_vis")
-args = parser.parse_args()
-normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-def remap_using_flow_fields(image, disp_x, disp_y, interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_CONSTANT):
-    """
-    opencv remap : carefull here mapx and mapy contains the index of the future position for each pixel
-    not the displacement !
-    map_x contains the index of the future horizontal position of each pixel [i,j] while map_y contains the index of the future y
-    position of each pixel [i,j]
-
-    All are numpy arrays
-    :param image: image to remap, HxWxC
-    :param disp_x: displacement on the horizontal direction to apply to each pixel. must be float32. HxW
-    :param disp_y: isplacement in the vertical direction to apply to each pixel. must be float32. HxW
-    :return:
-    remapped image. HxWxC
-    """
-    print("image shape in rempap", np.shape(image))
-    h_scale, w_scale=image.shape[:2]
-
-    # estimate the grid
-    X, Y = np.meshgrid(np.linspace(0, w_scale - 1, w_scale),
-                       np.linspace(0, h_scale - 1, h_scale))
-    map_x = (X+disp_x).astype(np.float32)
-    map_y = (Y+disp_y).astype(np.float32)
-    remapped_image = cv2.remap(image, map_x, map_y, interpolation=interpolation, borderMode=border_mode)
-
-    return remapped_image
->>>>>>> origin/kinux98
 
 # PCK metric from 'https://github.com/ignacio-rocco/weakalign/blob/master/util/eval_util.py'
 def correct_keypoints(source_points, warped_points, L_pck, alpha=0.1):
@@ -125,25 +89,19 @@ with torch.no_grad():
         source_image = batch['image1_rgb'].to(device)
         target_image = batch['image2_rgb'].to(device)
 
-<<<<<<< HEAD
-        raw_src = source_image.squeeze().permute(1, 2, 0).cpu().numpy()
-        raw_tgt = target_image.squeeze().permute(1, 2, 0).cpu().numpy()
-=======
-        raw_src = source_image.squeeze().permute(1,2,0).cpu().numpy()
-        raw_tgt = target_image.squeeze().permute(1,2,0).cpu().numpy()
-
         src_name = os.path.basename(batch['image1_name'][0])
         tgt_name = os.path.basename(batch['image2_name'][0])
->>>>>>> origin/kinux98
+
+        raw_src = source_image.squeeze().permute(1, 2, 0).cpu().numpy()
+        raw_tgt = target_image.squeeze().permute(1, 2, 0).cpu().numpy()
 
         src_image_H = int(batch['image1_size'][0][0])
         src_image_W = int(batch['image1_size'][0][1])
         tgt_image_H = int(batch['image2_size'][0][0])
         tgt_image_W = int(batch['image2_size'][0][1])
-        
+
         print(src_name, tgt_name)
-        # get a flow of target to source // 
-<<<<<<< HEAD
+        # get a flow of target to source //
         flow_T2S = net.estimate_flow(target_image*255, source_image*255, device, mode='channel_first')
 
         if args.visualize:
@@ -155,24 +113,12 @@ with torch.no_grad():
 
             fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
             axis1.imshow(resized_target.squeeze().permute(1, 2, 0).cpu().numpy())
-=======
-        flow_T2S = net.estimate_flow(target_image, source_image, device, mode='channel_first')
-        print(flow_T2S.shape)
-        
-        if(args.visualize):
-            resized_target = F.interpolate(target_image, size = (flow_T2S.shape[2],flow_T2S.shape[3]), mode='bilinear', align_corners=True)
-            warped_source_image = remap_using_flow_fields(resized_target.squeeze().permute(1,2,0).cpu().numpy(), flow_T2S.squeeze()[0].cpu().numpy(), flow_T2S.squeeze()[1].cpu().numpy())
-            
-            fig, (axis1, axis2, axis3) = plt.subplots(1, 3, figsize=(30, 30))
-            axis1.imshow(resized_target.squeeze().permute(1,2,0).cpu().numpy())
->>>>>>> origin/kinux98
             axis1.set_title('Target image')
             axis2.imshow(raw_src)
             axis2.set_title('Source image')
             axis3.imshow(warped_source_image)
             axis3.set_title('Warped target image according to estimated T2S_flow by GLU-Net')
-<<<<<<< HEAD
-            fig.savefig(os.path.join(args.write_dir, str(i) + '.png'),
+            fig.savefig(os.path.join(args.write_dir, 'Warped_' + tgt_name + '_to_' + src_name + '.png'),
                         bbox_inches='tight')
             plt.close(fig)
 
@@ -185,16 +131,6 @@ with torch.no_grad():
 
         flow_T2S_resized = flow_T2S_resized.permute(0,2,3,1)
         grid = flow_T2S_resized + grid
-=======
-            fig.savefig(os.path.join(args.write_dir, 'Warped_'+tgt_name+'_to_'+src_name+'.png'),
-                        bbox_inches='tight')
-            plt.close(fig)
-        
-        grid_warped = F.grid_sample(target_image, flow_T2S.permute(0,2,3,1)).to(device)
-        
-        grid = F.interpolate(grid_warped, size = (tgt_image_H,tgt_image_W), mode='bilinear', align_corners=True)
-        grid = grid.permute(0,2,3,1) 
->>>>>>> origin/kinux98
         grid_np = grid.cpu().data.numpy()
 
         image1_points = batch['image1_points'][0]
