@@ -11,5 +11,6 @@ GLU-Net/models/our_models/__pycache__
 GLU-Net/utils_training/__pycache__
 GLU-Net/pre_trained_models
 GLU-Net/.idea
+GLU-Net/visualize
 __pycache__
 .ipynb_checkpoints

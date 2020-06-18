@@ -50,7 +50,7 @@ def visualize_pair_and_flow(axis, source, target, flow, mask=None, matching_line
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='DGC-Net train script')
-    parser.add_argument('--image_data_path', type=str,
+    parser.add_argument('--image_data_path', default='datasets/training_datasets/sintel/extracted_pairs/random-style/all',type=str,
                         help='path to directory containing the original images.')
     parser.add_argument('--dataset', type=str, choices=['DPED_CityScape_ADE', 'Sintel'],
                         help='Which dataset to process and save')
@@ -58,7 +58,7 @@ if __name__ == "__main__":
                         help='dataset split')
     parser.add_argument('--csv_dir', type=str, default='datasets/csv_files',
                         help='directory to the CSV files')
-    parser.add_argument('--save_dir', type=str, default='datasets/training_datasets',
+    parser.add_argument('--save_dir', type=str, default='datasets/training_datasets/sintel/extracted_pairs/clean-geo-of-rc400-mirror',
                         help='path directory to save the image pairs and corresponding ground-truth flows')
     parser.add_argument('--plot', default=False, type=boolean_string,
                         help='plot as examples the first 4 pairs ? default is False')
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     print(device)
 
     args.csv_path = os.path.join(args.csv_dir, 'homo_aff_tps_' + args.split + '_' + args.dataset + '.csv')
-    args.save_dir = os.path.join(args.save_dir, args.dataset, args.split)
+    args.save_dir = os.path.join(args.save_dir, args.split)
 
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)

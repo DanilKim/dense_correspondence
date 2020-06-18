@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 from datasets.util import center_crop, load_flo
+from utils.image_transforms import RandomCrop
 
 
 def warp(x, flo):
@@ -196,12 +197,13 @@ class HomoAffTps_Dataset(Dataset):
         self.get_flow = get_flow
         #self.H_OUT, self.W_OUT = output_size
         ###########################################
-        self.W_HOMO = 1024
-        self.H_HOMO = 432
-        self.W_OUT = 1024
-        self.H_OUT = 432
+        self.W_HOMO = 400 # 1024
+        self.H_HOMO = 400 # 432
+        self.W_OUT = 400 # 1024
+        self.H_OUT = 400 # 432
         self.ratio_cropping = 20000
-        self.pyramid_param = [(1024, 432)]
+        self.pyramid_param = [(400, 400)] #[(1024, 432)]
+        self.random_crop = RandomCrop(400)
         ###########################################
 
         # changed compared to version from DGC-Net
@@ -382,6 +384,8 @@ class HomoAffTps_Dataset(Dataset):
         if not os.path.exists(source_img_name):
             raise ValueError("The path to one of the original image {} does not exist, check your image path "
                              "and your csv file !".format(source_img_name))
+        # Read image
+        source_img = cv2.cvtColor(cv2.imread(source_img_name), cv2.COLOR_BGR2RGB)
 
         # get flow
         if self.source_flow:
@@ -391,18 +395,20 @@ class HomoAffTps_Dataset(Dataset):
             source_flow_name = osp.join(self.img_path, source_dir_name, 'flow.flo')
             source_mask_name = osp.join(self.img_path, source_dir_name, 'occlusion.png')
 
-            source_src = cv2.cvtColor(cv2.imread(source_src_name),
-                                      cv2.COLOR_BGR2RGB)
+            source_src = cv2.cvtColor(cv2.imread(source_src_name), cv2.COLOR_BGR2RGB)
+            source_img = cv2.cvtColor(cv2.imread(source_img_name), cv2.COLOR_BGR2RGB)
             source_flow = load_flo(source_flow_name)
             source_mask = cv2.imread(source_mask_name)
             source_mask = (1 - source_mask/255)
 
+            source_src = self.random_crop(source_src)
+            source_img = self.random_crop(source_img)
+            source_flow = self.random_crop(source_flow)
+            source_mask = self.random_crop(source_mask)
+
 
         # aff/tps transformations
         if transform_type == 0 or transform_type == 1:
-            # read image
-            source_img = cv2.cvtColor(cv2.imread(source_img_name),
-                                      cv2.COLOR_BGR2RGB)
 
             # self.plot_flow(source_src, source_img, source_flow, source_mask)
             # cropping dimension of the image first if it is too big, would occur to big resizing after
@@ -497,7 +503,7 @@ class HomoAffTps_Dataset(Dataset):
         elif transform_type == 2:
             # ATTENTION CV2 resize is inverted, first w and then h
             theta = data.iloc[2:11].values.astype('double').reshape(3, 3)
-            source_img = cv2.cvtColor(cv2.imread(source_img_name), cv2.COLOR_BGR2RGB)
+
             # self.plot_flow(source_src, source_img, source_flow, source_mask[:,:,0])
             # cropping dimention of the image first if it is too big, would occur to big resizing after
             if source_img.shape[0] > self.H_HOMO * self.ratio_cropping \
